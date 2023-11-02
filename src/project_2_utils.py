@@ -9,12 +9,12 @@ import autograd.numpy as np
 from autograd import grad
 import matplotlib.pyplot as plt
 
-def simple_func(x, a0, a1, a2):
+def simple_func(x, a0, a1, a2, noise_sigma = 0.0):
     """
     Stupid-simple function to test the code
     """
 
-    return a0 + a1*x + a2*x*x
+    return (a0 + a1*x + a2*x*x) + np.random.randn(len(x))*noise_sigma
 
 def gradient_simple_function(X, y, beta):
 
@@ -25,7 +25,7 @@ def gradient_simple_function(X, y, beta):
 
     n = int((X.shape[0]))
 
-    return (2.0/n)*X.T@(X@beta - y)
+    y = (2.0/n)*X.T@(X@beta - y)
 
 def one_d_design_matrix(x, n):
     """
@@ -51,6 +51,35 @@ def gradient_descent_step(X, y, beta, eta):
     n = int((X.shape[0]))
 
     return beta - eta*(2.0/n)*X.T@(X@beta - y)
+
+def gradient_descent(X, y, beta, eta, MaxIterations = 100000, epsilon = 1.0e-8):
+
+    """
+    Function to perform gradient descent
+
+    eta is the learning rate
+
+    """
+
+    n = int((X.shape[0]))
+
+    for iter in range(MaxIterations):
+        gradient = (2.0/n)*X.T.dot(X.dot(beta)-y)
+        beta -= eta*gradient
+        if (np.linalg.norm(gradient) < epsilon):
+            break
+
+    return beta
+
+def gradient_descent_with_momentum(X, y, beta, eta, 
+                                   gamma, MaxIterations = 100000, 
+                                   epsilon = 1.0e-8):
+    
+    """
+    Function to perform gradient descent with momentum
+    """
+
+    solutions, scores = [], []
 
 def eta_from_hessian(X):
     """
