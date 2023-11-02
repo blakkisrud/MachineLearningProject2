@@ -55,8 +55,40 @@ plt.savefig(fig_path + "gradient_descent.png")
 print("Final beta values: ", beta_from_function)
 print("OLS values: ", beta_linreg)
 
-#print(beta)
-#print(beta_linreg)
+print("With momentum")
+
+(beta, beta_list, scores) = p2utils.gradient_descent_with_momentum(X, y, np.random.randn(3,1), 
+                                              suggested_eta,
+                                              gamma=0.9)
+
+print("Going into minibatch")
+
+(beta_mini, scores) = p2utils.gradient_descent_with_minibatches(X, y, np.random.randn(3,1),
+                                                suggested_eta,
+                                                minibatch_size=10)
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.plot(x, y, 'o', label='Data points', alpha=0.5)
+ax.plot(x, X.dot(beta), label='Momentum')
+ax.plot(x, X.dot(beta_mini), label='Minibatch')
+ax.plot(x, X.dot(beta_linreg), label='OLS')
+
+plt.legend()
+
+plt.savefig(fig_path + "momentum_minibatch.png")
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.plot(scores, label='Minibatch')
+ax.set_xlabel("Epochs")
+
+plt.savefig(fig_path + "minibatch_scores.png")
+
+print("Final results")
+print(beta)
+print(beta_linreg)
+print(beta_mini)
 
 
 

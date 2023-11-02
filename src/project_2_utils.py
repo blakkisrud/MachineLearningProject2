@@ -77,9 +77,35 @@ def gradient_descent_with_momentum(X, y, beta, eta,
     
     """
     Function to perform gradient descent with momentum
+    For now simply with the polynomial function
     """
 
-    solutions, scores = [], []
+    # Holding now the MSE and the beta-values
+    beta_list, scores = [], []
+
+    change = 0.0
+
+    n = int((X.shape[0]))
+
+    for iter in range(MaxIterations):
+
+        gradient = (2.0/n)*X.T.dot(X.dot(beta)-y)
+        change = gamma*change + eta*gradient
+        beta -= change
+
+        y_predict = X.dot(beta)
+        mse = np.mean((y-y_predict)**2.0)
+
+        beta_list.append(beta)
+        scores.append(mse)
+
+        #print("Now doing iteration: ", iter)
+
+        if (np.linalg.norm(gradient) < epsilon):
+            break
+
+    return (beta, beta_list, scores)
+
 
 def eta_from_hessian(X):
     """
@@ -95,3 +121,41 @@ def eta_from_hessian(X):
 
     return 1.0/np.max(EigValues)
 
+def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBOSE = False):
+
+    n_epochs = 50
+    n = int((X.shape[0]))
+
+    minibatch_size = 20
+
+    np.random.seed(42)
+
+    n_iterations = n_epochs * n // minibatch_size
+
+    scores = []
+
+    for epoch in range(n_epochs):
+        shuffled_indices = np.random.permutation(n)
+        X_shuffled = X[shuffled_indices]
+        y_shuffled = y[shuffled_indices]
+        for iteration in range(n_iterations):
+            start_idx = iteration * minibatch_size
+            end_idx = start_idx + minibatch_size
+            xi = X_shuffled[start_idx:end_idx]
+            yi = y_shuffled[start_idx:end_idx]
+            gradient = 2/minibatch_size * xi.T.dot(xi.dot(beta) - yi)
+            beta = beta - eta * gradient
+
+        if VERBOSE:
+            print("Now doing epoch: ", epoch)
+            print("Current beta: ", beta)
+
+        y_predict = X.dot(beta)
+
+        mse = np.mean((y-y_predict)**2.0)
+
+        scores.append(mse)
+
+        
+
+    return beta, scores
