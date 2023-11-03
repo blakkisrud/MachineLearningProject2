@@ -9,12 +9,251 @@ import autograd.numpy as np
 from autograd import grad
 import matplotlib.pyplot as plt
 
+
+"""
+
+Use the classe-implementations of the schedulers
+
+"""
+class Scheduler():
+
+    """
+    This is the abstracted class
+    """
+
+    def __init__(self, eta):
+
+        self.eta = eta
+
+    def update_change(self, gradient):
+        raise NotImplementedError
+        
+    def reset(self):
+        pass
+
+class ConstantScheduler(Scheduler):
+
+    def __init__(self, eta):
+        super().__init__(eta)
+
+    def update_change(self, gradient):
+        return self.eta*gradient
+    
+    def reset(self):
+        pass
+
+class MomentumScheduler(Scheduler):
+
+    def __init__(self, eta: float, momentum: float):
+        super().__init__(eta)
+        self.momentum = momentum
+        self.change = 0
+
+    def update_change(self, gradient):
+        self.change = self.momentum * self.change + self.eta * gradient
+        return self.change
+
+    def reset(self):
+        pass
+
+class AdagradScheduler(Scheduler):
+
+    """
+    NB! This does not work well with the general gradient descent function
+    it runs but does not converge to any nice value
+    """
+    def __init__(self, eta):
+        super().__init__(eta)
+        self.G_t = None
+
+    def update_change(self, gradient):
+        delta = 1e-8  # avoid division ny zero
+
+        if self.G_t is None:
+            self.G_t = np.zeros((gradient.shape[0], gradient.shape[0]))
+
+        self.G_t += gradient @ gradient.T
+
+        G_t_inverse = 1 / (
+            delta + np.sqrt(np.reshape(np.diagonal(self.G_t), (self.G_t.shape[0], 1)))
+        )
+
+        return self.eta * gradient * G_t_inverse
+
+    def reset(self):
+        self.G_t = None
+
+class RMS_propScheduler(Scheduler):
+    def __init__(self, eta, rho):
+        super().__init__(eta)
+        self.rho = rho
+        self.second = 0.0
+
+    def update_change(self, gradient):
+        delta = 1e-8  # avoid division ny zero
+        self.second = self.rho * self.second + (1 - self.rho) * gradient * gradient
+        return self.eta * gradient / (np.sqrt(self.second + delta))
+
+    def reset(self):
+        self.second = 0.0
+
+class AdamScheduler(Scheduler):
+    def __init__(self, eta, rho, rho2):
+        super().__init__(eta)
+        self.rho = rho
+        self.rho2 = rho2
+        self.moment = 0
+        self.second = 0
+        self.n_epochs = 1
+
+    def update_change(self, gradient):
+        delta = 1e-8  # avoid division ny zero
+
+        self.moment = self.rho * self.moment + (1 - self.rho) * gradient
+        self.second = self.rho2 * self.second + (1 - self.rho2) * gradient * gradient
+
+        moment_corrected = self.moment / (1 - self.rho**self.n_epochs)
+        second_corrected = self.second / (1 - self.rho2**self.n_epochs)
+
+        return self.eta * moment_corrected / (np.sqrt(second_corrected + delta))
+
+    def reset(self):
+        self.n_epochs += 1
+        self.moment = 0
+        self.second = 0
+
+# End of the scheduler class definitions
+#==================================================================
+
+def general_gradient_descent(X, y, beta, scheduler,
+                             cost_func,
+                             gradient_cost_func,
+                             epsilon = 1.0e-4,
+                             max_iterations = 100000,
+                             return_diagnostics = False):
+    
+    """
+    This is the general gradient descent, can be performed with 
+    all cost functions and gradients (that need to be analytically defined)
+    """
+
+    if return_diagnostics:
+        mse_vector = []
+        beta_vector = []
+        iteration_vec = []
+
+    n = int((X.shape[0]))
+
+    for iter in range(max_iterations):
+        gradient = gradient_cost_func(X, y, beta)
+        change = scheduler.update_change(gradient)
+        beta -= change
+        if (np.linalg.norm(gradient) < epsilon):
+            print("Gradient descent converged")
+            break
+
+        if return_diagnostics:
+            y_predict = X.dot(beta)
+            mse = np.mean((y-y_predict)**2.0)
+
+            mse_vector.append(mse)
+            beta_vector.append(beta)
+            iteration_vec.append(iter)
+
+    print("Number of iterations: ", iter)
+
+    if return_diagnostics:
+
+        diagnostic_output = {"mse": mse_vector,
+                             "beta_vector": beta_vector,
+                             "iteration": iteration_vec,
+                             "beta": beta}
+
+        return diagnostic_output
+    
+    else:
+
+        return beta
+    
+def general_stochastic_gradient_descent(X, y, beta, scheduler,
+                                        cost_func,
+                                        mini_batch_size,
+                                        epochs,
+                                        gradient_cost_func,
+                                        epsilon = 1.0e-4,
+                                        max_iterations = 100000,
+                                        return_diagnostics = False):
+
+    """
+    This is the general stochastic gradient descent, can be performed with 
+    all cost functions and gradients (that need to be analytically defined)
+    """
+
+    if return_diagnostics:
+        mse_vector = []
+        beta_vector = []
+        iteration_vec = []
+
+    n = int((X.shape[0]))
+
+    for iter in range(max_iterations):
+        i = np.random.randint(n)
+        gradient = gradient_cost_func(X[i:i+1], y[i:i+1], beta)
+        change = scheduler.update_change(gradient)
+        beta -= change
+        if (np.linalg.norm(gradient) < epsilon):
+            print("Gradient descent converged")
+            break
+
+        if return_diagnostics:
+            y_predict = X.dot(beta)
+            mse = np.mean((y-y_predict)**2.0)
+
+            mse_vector.append(mse)
+            beta_vector.append(beta)
+            iteration_vec.append(iter)
+
+    print("Number of iterations: ", iter)
+
+    if return_diagnostics:
+
+        diagnostic_output = {"mse": mse_vector,
+                             "beta_vector": beta_vector,
+                             "iteration": iteration_vec,
+                             "beta": beta}
+
+        return diagnostic_output
+    
+    else:
+
+        return beta
+
+
+
+
+
+def time_step_length(t, t0, t1):
+    """
+    Function to calculate the time step length
+    """
+
+    return t0/(t + t1)
+
 def simple_func(x, a0, a1, a2, noise_sigma = 0.0):
     """
     Stupid-simple function to test the code
     """
 
     return (a0 + a1*x + a2*x*x) + np.random.randn(len(x))*noise_sigma
+
+def simple_cost_func(X, y, beta):
+    """
+    Function to calculate the cost function
+    """
+
+    n = int((X.shape[0]))
+
+    return (1.0/n)*np.sum((X@beta - y)**2.0)
 
 def gradient_simple_function(X, y, beta):
 
@@ -26,6 +265,8 @@ def gradient_simple_function(X, y, beta):
     n = int((X.shape[0]))
 
     y = (2.0/n)*X.T@(X@beta - y)
+
+    return y
 
 def one_d_design_matrix(x, n):
     """
@@ -126,8 +367,6 @@ def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBO
     n_epochs = 50
     n = int((X.shape[0]))
 
-    minibatch_size = 20
-
     np.random.seed(42)
 
     n_iterations = n_epochs * n // minibatch_size
@@ -156,6 +395,47 @@ def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBO
 
         scores.append(mse)
 
-        
+    return beta, scores
+
+def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
+
+    n_epochs = 50
+    n = int((X.shape[0]))
+
+    n_iterations = n_epochs * n // minibatch_size
+
+    scores = []
+
+    eta = eta0
+
+    for epoch in range(1,n_epochs+1):
+
+        shuffled_indices = np.random.permutation(n)
+        X_shuffled = X[shuffled_indices]
+        y_shuffled = y[shuffled_indices]
+
+        for iteration in range(n_iterations):
+            t = epoch*n_iterations + iteration
+            print(eta)
+            eta = time_step_length(float(t), 1.0, 10.0)
+            start_idx = iteration * minibatch_size
+            end_idx = start_idx + minibatch_size
+            xi = X_shuffled[start_idx:end_idx]
+            yi = y_shuffled[start_idx:end_idx]
+            gradient = 2/minibatch_size * xi.T.dot(xi.dot(beta) - yi)
+            beta = beta - eta * gradient
+
+        y_predict = X.dot(beta)
+
+        mse = np.mean((y-y_predict)**2.0)
+
+        scores.append(mse)
 
     return beta, scores
+
+        
+
+    
+
+    return 0
+
