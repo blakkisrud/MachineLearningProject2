@@ -27,7 +27,7 @@ class Scheduler():
 
     def update_change(self, gradient):
         raise NotImplementedError
-        
+
     def reset(self):
         pass
 
@@ -38,7 +38,7 @@ class ConstantScheduler(Scheduler):
 
     def update_change(self, gradient):
         return self.eta*gradient
-    
+
     def reset(self):
         pass
 
@@ -131,9 +131,9 @@ def general_gradient_descent(X, y, beta, scheduler,
                              epsilon = 1.0e-4,
                              max_iterations = 100000,
                              return_diagnostics = False):
-    
+
     """
-    This is the general gradient descent, can be performed with 
+    This is the general gradient descent, can be performed with
     all cost functions and gradients (that need to be analytically defined)
     """
 
@@ -170,11 +170,11 @@ def general_gradient_descent(X, y, beta, scheduler,
                              "beta": beta}
 
         return diagnostic_output
-    
+
     else:
 
         return beta
-    
+
 def general_stochastic_gradient_descent(X, y, beta, scheduler,
                                         cost_func,
                                         mini_batch_size,
@@ -185,7 +185,7 @@ def general_stochastic_gradient_descent(X, y, beta, scheduler,
                                         return_diagnostics = False):
 
     """
-    This is the general stochastic gradient descent, can be performed with 
+    This is the general stochastic gradient descent, can be performed with
     all cost functions and gradients (that need to be analytically defined)
     """
 
@@ -223,7 +223,7 @@ def general_stochastic_gradient_descent(X, y, beta, scheduler,
                              "beta": beta}
 
         return diagnostic_output
-    
+
     else:
 
         return beta
@@ -397,6 +397,32 @@ def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBO
 
     return beta, scores
 
+
+def sigmoid(z):
+    f = lambda z: 1 / (1 + np.exp(-z))
+    vf = np.vectorize(f)
+    return vf(z)
+
+
+def sigmoid_derivated(z):
+    f = lambda z: sigmoid(z) * (1 - sigmoid(z))
+    vf = np.vectorize(f)
+    return vf(z)
+
+
+def identity(z):
+    f = lambda z: z
+    vf = np.vectorize(f)
+    return vf(z)
+
+
+def identity_derived(z):
+    f = lambda z: 1
+    vf = np.vectorize(f)
+    return vf(z)
+
+
+
 def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
 
     n_epochs = 50
@@ -433,9 +459,9 @@ def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
 
     return beta, scores
 
-        
 
-    
+
+
 
     return 0
 
