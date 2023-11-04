@@ -2,20 +2,40 @@ import sys
 import os
 
 import project_2_utils as utils
+from project_2_utils import ConstantScheduler
+from project_2_utils import MomentumScheduler
+from project_2_utils import AdagradScheduler
+from project_2_utils import RMS_propScheduler
+from project_2_utils import AdamScheduler
+
+from copy import deepcopy, copy
+
 import autograd.numpy as np
 
 from sklearn.datasets import load_digits
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from matplotlib import pyplot as plt
+                    
+from sklearn.utils import resample
 
 ## ITERATION 1: predict a single MNIST image by overfitting a feed-forward neural network
 
-
 class fnn():
-    def __init__(self, dim_input, dim_output, dims_hiddens, activation_func, outcome_func, activation_func_deriv, outcome_func_deriv, learning_rate=1e-4):
+    def __init__(self, dim_input, dim_output, dims_hiddens, 
+                 activation_func, outcome_func, 
+                 activation_func_deriv, outcome_func_deriv, 
+                 learning_rate=1e-4,
+                 max_iterations=1000,
+                 epsilon = 1.0e-8,
+                 batches = 1,
+                 scheduler=None):
+
         self.dim_input = dim_input
         self.dim_output = dim_output
+
+        self.batches = batches
+        self.scheduler = scheduler
 
         self.dims_hiddens = dims_hiddens    # tuple of neurons per hidden layer, e.g. (8) for single layer or (16, 8, 8) for three hidden layers
         self.num_hidden_layers = len(dims_hiddens)
@@ -24,6 +44,13 @@ class fnn():
         self.outcome_func = outcome_func
         self.outcome_func_deriv = outcome_func_deriv
 
+        # Schedule list for Weidghts and biases
+
+        self.schedulers_weights = []
+        self.schedulers_biases = []
+
+        self.max_iterations = max_iterations
+        self.epsilon = epsilon
 
         self.layer_sizes = [dim_input] + self.dims_hiddens + [output_dim]
         self.num_layers = len(self.layer_sizes)
@@ -35,7 +62,6 @@ class fnn():
         self.init_random_weights_biases()
 
         self.learning_rate = learning_rate # TODO: make dynamic
-
 
     def init_random_weights_biases(self):
         print(f"INITIALIZING RANDOM VALUES FOR LAYERS ({self.num_hidden_layers} hidden)", [self.dim_input, *self.dims_hiddens, self.dim_output])
@@ -50,8 +76,8 @@ class fnn():
             # weights.append(np.random.randn(dims_prev, dims))
             # biases.append(np.random.randn(dims))
 
-            weights.append(np.random.normal(size=(dims_prev, dims)))
-            biases.append(np.random.normal(size=(dims)))
+            weights.append(np.random.normal(size=(dims_prev, dims), loc = 0.01, scale = 1e-3))
+            biases.append(np.random.normal(size=(dims)) + 1e-3)
 
             dims_prev = dims
 
@@ -59,7 +85,6 @@ class fnn():
         self.biases = biases
 
         pass
-
 
     def predict_feed_forward(self, X, **kwargs):
         print(f"PREDICTING BY FEED-FORWARDING INPUT {X.shape} THROUGH NETWORK") if kwargs.get("verbose", 0) else 0
@@ -133,20 +158,25 @@ class fnn():
             dW = np.dot(self.activations[l].T, delta_l)
             db = np.sum(delta_l, axis=0)
 
+            # Would dW and db be the gradiants?
+
             # print("dW, db", dW.shape, db.shape)
             # print(dW)
 
+            # update weights and biases here
 
-            self.weights[l] -= self.learning_rate * dW / num_obs
-            self.biases[l] -= self.learning_rate * db / num_obs
+            change_weights = (self.schedulers_weights[l].update_change(dW))/num_obs
+            change_biases = (self.schedulers_biases[l].update_change(db))/num_obs
+
+            self.weights[l] -= change_weights
+            self.biases[l] -= change_biases
 
             dC = np.dot(delta_l, self.weights[l].T)
 
-        # sys.exit()
         return loss
 
 
-    def train(self, X, y, stochastic=True, epochs=10, **kwargs):
+    def train(self, X, y, scheduler, epochs=100, **kwargs):
         plot = kwargs.get("plot")
         figax = kwargs.get("figax", (0, 0))
         if plot or figax:
@@ -158,27 +188,45 @@ class fnn():
         # fig, ax = plt.subplots() if plot else (0, 0)
         loss_for_epochs = []
 
+        batch_size = X.shape[0] // self.batches
+
+        print("Using the scheduler")
+        print("scheduler", scheduler)
+
+        for n in range(len(self.weights)):
+            self.schedulers_weights.append(copy(scheduler))
+            self.schedulers_biases.append(copy(scheduler))
+
+        X, y = resample(X, y) # Resample the data for the mini-batches
+
         for e in range(epochs):
 
-            if stochastic:
-                from sklearn.utils import resample
-                X_samp, y_samp = resample(X, y)
-                self.predict_feed_forward(X_samp)
-                loss = self.backpropagate(y_samp, **kwargs)
-                # print("STOCHASTIC")
-            else:
-                # print("NON_STOCHASTIC")
-                self.predict_feed_forward(X)
-                loss = self.backpropagate(y, **kwargs)
-            # ax.plot(list(range(len(loss))), loss, "x", label=f"{e}") if plot else 0
-            # print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}")
+            print(f"epoch {e}", end="\r") 
+
+            for n in range(self.batches):
+
+                if n == self.batches - 1:
+
+                    X_batch = X[n*batch_size:]
+                    y_batch = y[n*batch_size:]
+
+                else:
+
+                    X_batch = X[n*batch_size:(n+1)*batch_size]
+                    y_batch = y[n*batch_size:(n+1)*batch_size]
+
+                self.predict_feed_forward(X_batch)
+                loss = self.backpropagate(y_batch, **kwargs)
+
+            # After the epoch is done, we can reset the scheduler
+
+            for n in range(len(self.weights)):
+                self.schedulers_weights[n].reset()
+                self.schedulers_biases[n].reset()
+            
             print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}", self.weights, self.biases) if kwargs.get("verbose", 0) else 0
 
             loss_for_epochs.append(np.mean(loss))
-
-            # print(loss.shape) if kwargs.get("verbose", 0) else 0
-            # print(e, f"{np.mean(loss):.3e}")
-
 
         ax.plot(list(range(epochs)), loss_for_epochs) if plot else 0
         ax.set_title(kwargs.get("plot_title")) if plot else 0
@@ -186,7 +234,6 @@ class fnn():
 
         plt.show() if showplot else 0
         return loss_for_epochs
-
 
 if __name__ == "__main__":
 
@@ -239,7 +286,6 @@ if __name__ == "__main__":
     num_obs = len(y)
     print("SHAPE x / y:", X.shape, y.shape)
 
-
     # activation_func = np.vectorize(lambda z: 1 / (1 + np.exp(-z)))  # sigmoidal activation
     # outcome_func = np.vectorize(lambda z: z)    # identity function
 
@@ -249,35 +295,30 @@ if __name__ == "__main__":
     outcome_func = utils.identity
     outcome_func_deriv = utils.identity_derived
 
-
     # dims_hidden = [8, 8, 8]
     dims_hidden = [1]
     # dims_hidden = []
 
-    lr = 1e-2
+    lr = 0.1
     epochs = 100
 
-    stochastic = True
-
-
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
-              activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, outcome_func_deriv=outcome_func_deriv)
-
-    # net.predict_feed_forward(X)
-    # net.backpropagate(y)
-
+              activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
+              outcome_func_deriv=outcome_func_deriv,
+              batches=10,
+              scheduler=AdamScheduler(lr, 0.9, 0.999))
 
     # Plot MSE for epochs for repeated random initialization
 
-    nrand = 8
+    nrand = 1
     plot = True
 
     fig_folder = r"figs\neural_test"
     if not os.path.exists(fig_folder):
         os.mkdir(fig_folder)
 
-    title = f"hidden dims = {net.dims_hiddens}, repeated with random initiation {nrand} times, eta={net.learning_rate:.3e}, stochastic={stochastic}, N_obs={num_obs}"
-    savename = f"nn={net.layer_sizes}_stochastic={stochastic}_lr={net.learning_rate}.png"
+    title = f"hidden dims = {net.dims_hiddens}, repeated with random initiation {nrand} times, eta={net.learning_rate:.3e}, N_obs={num_obs}"
+    savename = f"nn={net.layer_sizes}_lr={net.learning_rate}.png"
     fig_path = os.path.join(fig_folder, savename)
 
     from sklearn.metrics import mean_squared_error
@@ -295,13 +336,9 @@ if __name__ == "__main__":
         for i in range(nrand):
             net.init_random_weights_biases()
 
-            # if stochastic:
-                # from sklearn.utils import resample
-                # X_samp, y_samp = resample(X, y)
-                # errs = net.train(X_samp, y_samp, plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}")
-
-            # else:
-            loss_epochs = net.train(X, y, epochs=epochs, stochastic=stochastic, plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
+            loss_epochs = net.train(X, y, epochs=epochs, 
+                                    scheduler=MomentumScheduler(lr, 0.9),
+                                    plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
             # print(net.weights, net.biases)
 
             loss_final = loss_epochs[-1]
