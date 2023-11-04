@@ -6,6 +6,7 @@ import autograd.numpy as np
 
 from sklearn.datasets import load_digits
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.metrics import mean_squared_error
 
 from matplotlib import pyplot as plt
 
@@ -25,7 +26,7 @@ class fnn():
         self.outcome_func_deriv = outcome_func_deriv
 
 
-        self.layer_sizes = [dim_input] + self.dims_hiddens + [output_dim]
+        self.layer_sizes = [dim_input] + self.dims_hiddens + [dim_output]
         self.num_layers = len(self.layer_sizes)
 
 
@@ -51,7 +52,9 @@ class fnn():
             # biases.append(np.random.randn(dims))
 
             weights.append(np.random.normal(size=(dims_prev, dims)))
-            biases.append(np.random.normal(size=(dims)))
+            # biases.append(np.random.normal(size=(dims)))
+            # biases.append(np.zeros((dims)))
+            biases.append(np.zeros((dims)) + np.random.normal(size=(dims), loc=0.1, scale=0.01))
 
             dims_prev = dims
 
@@ -89,7 +92,7 @@ class fnn():
     def backpropagate(self, y, **kwargs):
         # print("activations", [np.shape(a) for a in self.activations])
         # print("weights", [np.shape(w) for w in self.weights])
-        verbose = kwargs.get("verbose", True)
+        verbose = kwargs.get("verbose", False)
 
         # TODO: GENERALIZE TO ARBITRARY ACTIVATION FUNCTIONS, WITH DERIVATIVES
 
@@ -111,6 +114,9 @@ class fnn():
         for l in range(self.num_layers - 2, -1, -1):
             print("l=", l) if verbose else 0
 
+
+            # TODO: automatic differentiation
+
             # FINAL / OUTPUT LAYER
             if l == self.num_layers - 2:
                 # print("FINAL LAYER")
@@ -124,7 +130,7 @@ class fnn():
 
             # print("dC, fderiv_l", dC.shape, f_deriv_zl.shape)
             delta_l = dC * f_deriv_zl
-            # print("delta_l", delta_l.shape)
+            print("delta_l", delta_l.shape) if verbose else 0
             # print("activations_l.T, delta_l", self.activations[l].T.shape, delta_l.shape)
 
 
@@ -146,13 +152,15 @@ class fnn():
         return loss
 
 
-    def train(self, X, y, stochastic=True, epochs=10, **kwargs):
-        plot = kwargs.get("plot")
-        figax = kwargs.get("figax", (0, 0))
+    def train(self, X, y, stochastic=False, epochs=10, **kwargs):
+        plot = kwargs.get("plot", False)
+        figax = kwargs.get("figax", False)
+        showplot = kwargs.get("showplot", False)
+        verbose = kwargs.get("verbose", False)
+
         if plot or figax:
             fig, ax = figax
 
-            showplot = kwargs.get("showplot", False)
             plot = True
 
         # fig, ax = plt.subplots() if plot else (0, 0)
@@ -172,7 +180,12 @@ class fnn():
                 loss = self.backpropagate(y, **kwargs)
             # ax.plot(list(range(len(loss))), loss, "x", label=f"{e}") if plot else 0
             # print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}")
-            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}", self.weights, self.biases) if kwargs.get("verbose", 0) else 0
+            print(e, loss.shape, f"loss={np.mean(loss):.3e}, {np.median(loss):.3e}") if verbose else 0
+            # print(self.weights, self.biases) if verbose else 0
+
+            if not e % 10:
+                print(f"epoch={e}\tloss={np.mean(loss):.3e}")
+
 
             loss_for_epochs.append(np.mean(loss))
 
@@ -190,11 +203,11 @@ class fnn():
 
 if __name__ == "__main__":
 
-    input_mode = 1
-    valid_inputs = [1, 2]
+    input_mode = 3
+    valid_inputs = [1, 2, 3]
 
     while input_mode not in valid_inputs:
-        input_mode = input("SELECT INPUT: 1 = simple one-dimensional function, 2 = single MNIST digits image, 3 = franke function (not implemented), 4 = terrain image (not implemented)\n")
+        input_mode = input("SELECT INPUT: 1 = simple one-dimensional function, 2 = single MNIST digits image, 3 = Wisconsin breast cancer dataset, 4 = franke function (not implemented), 5 = terrain image (not implemented)\n")
         try:
             input_mode = int(input_mode)
         except Exception as e:
@@ -206,7 +219,7 @@ if __name__ == "__main__":
     # LOAD ONE-DIM FUNCTION R1 -> R1
     if input_mode == 1:
         print("LOADING SIMPLE ONE-DIMENSIONAL FUNCTION")
-        x = np.arange(0, 10, 0.01)
+        x = np.arange(0, 10, 0.1)
         X = utils.one_d_design_matrix(x, n=1)
         X = X[:, 1]     # remove bias from design matrix
         X = X.reshape(-1, 1)
@@ -217,8 +230,10 @@ if __name__ == "__main__":
         input_dim = 1
         # plt.plot(x, y)
         # plt.show()
+        y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
 
-    # LOAD SINGLE MNIST-IMAGE R2 -> R2
+
+    # SINGLE MNIST-IMAGE R2 -> R2
     if input_mode == 2:
         print("LOADING SINGLE MNIST IMAGE")
         dataset_digits = load_digits()
@@ -229,13 +244,33 @@ if __name__ == "__main__":
         y = img.ravel()
         X = np.arange(0, len(y)).reshape(1, -1)
 
+        y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(1, -1)
+
+
         # use all pixels for both training and testing
         # TODO: implement 2-dimensional design matrix
         input_dim = np.prod(img.shape)
         output_dim = np.prod(img.shape)
 
 
-    y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
+    # classification R30 -> R1
+    if input_mode == 3:
+        print("LOADING Wisconsin Breast Cancer data set")
+        from sklearn.datasets import load_breast_cancer
+        X, y = load_breast_cancer(return_X_y=True, as_frame=True)
+        print(X.shape, y.shape)
+        print("features = ", X.columns.values)
+        counts_out =  np.unique(y, return_counts=True)
+        print(counts_out)
+        print(y)
+        print(f"outcome balance: num {counts_out[0][0]} = {counts_out[1][0]}, num {counts_out[0][1]} = {counts_out[1][1]}")
+
+
+
+        sys.exit()
+        pass
+
+
     num_obs = len(y)
     print("SHAPE x / y:", X.shape, y.shape)
 
@@ -251,13 +286,15 @@ if __name__ == "__main__":
 
 
     # dims_hidden = [8, 8, 8]
-    dims_hidden = [1]
-    # dims_hidden = []
+    # dims_hidden = [1]
+    dims_hidden = []
 
-    lr = 1e-2
-    epochs = 100
 
-    stochastic = True
+    # lr = 1e-7   # image with no hidden layes
+    lr = 1e-1
+    epochs = 1000
+
+    stochastic = False
 
 
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
@@ -269,7 +306,7 @@ if __name__ == "__main__":
 
     # Plot MSE for epochs for repeated random initialization
 
-    nrand = 8
+    nrand = 3
     plot = True
 
     fig_folder = r"figs\neural_test"
@@ -280,9 +317,8 @@ if __name__ == "__main__":
     savename = f"nn={net.layer_sizes}_stochastic={stochastic}_lr={net.learning_rate}.png"
     fig_path = os.path.join(fig_folder, savename)
 
-    from sklearn.metrics import mean_squared_error
 
-    if plot:
+    if plot and input_mode == 1:
         fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
         ax, ax1 = ax
         ax1.set_ylim(0, 1)
@@ -301,20 +337,22 @@ if __name__ == "__main__":
                 # errs = net.train(X_samp, y_samp, plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}")
 
             # else:
-            loss_epochs = net.train(X, y, epochs=epochs, stochastic=stochastic, plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
+            # loss_epochs = net.train(X, y, epochs=epochs, stochastic=stochastic, plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
+            loss_epochs = net.train(X, y, epochs=epochs, stochastic=stochastic)
             # print(net.weights, net.biases)
 
             loss_final = loss_epochs[-1]
             max_loss = loss_final if loss_final > max_loss else max_loss
 
             yhat = net.predict_feed_forward(X)
+
             mse = mean_squared_error(y, yhat)
             mse2 = mean_squared_error(y, net.activations[-1])
             print(i, f"mse={mse:.2e}, {mse2:.2e}")
             print(f"weights", net.weights, "biases", net.biases)
 
 
-            ax.plot(list(range(len(loss_epochs))), loss_epochs, c=f"C{i}", label=i)
+            ax.plot(list(range(len(loss_epochs))), loss_epochs, "x", c=f"C{i}", label=i)
             ax1.plot(x, yhat, c=f"C{i}", label=i)
 
 
@@ -334,12 +372,14 @@ if __name__ == "__main__":
         fig.savefig(fig_path)
         plt.show()
 
-
     for wi, bi in zip(net.weights, net.biases):
         print(wi.shape, bi.shape)
 
     yhat = net.predict_feed_forward(X)
+    net.train(X, y, epochs=epochs, verbose=True)
+    yhat = net.predict_feed_forward(X)
     print(yhat.shape)
+
 
     if input_mode == 1:
         fig, ax = plt.subplots()
@@ -359,5 +399,5 @@ if __name__ == "__main__":
         ax[1].imshow(img_pred, cmap="gray");
         ax[1].set_title("Prediction")
 
-    # plt.show()
-    plt.close()
+    plt.show()
+    # plt.close()
