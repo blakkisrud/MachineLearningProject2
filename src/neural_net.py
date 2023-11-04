@@ -306,7 +306,7 @@ if __name__ == "__main__":
               activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
               outcome_func_deriv=outcome_func_deriv,
               batches=10,
-              scheduler=AdamScheduler(lr, 0.9, 0.999))
+              scheduler=MomentumScheduler(lr, 0.9))
 
     # Plot MSE for epochs for repeated random initialization
 
