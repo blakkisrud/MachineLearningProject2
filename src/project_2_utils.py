@@ -8,11 +8,13 @@ import numpy as np
 import autograd.numpy as np
 from autograd import grad
 import matplotlib.pyplot as plt
+from autograd import elementwise_grad
 
 
 """
 
 Use the classe-implementations of the schedulers
+from the lecture notes
 
 """
 class Scheduler():
@@ -123,6 +125,57 @@ class AdamScheduler(Scheduler):
         self.second = 0
 
 # End of the scheduler class definitions
+#==================================================================
+
+# Activation functions and ways to calculate the gradients of them
+
+def identity(X):
+    return X
+
+
+def sigmoid(X):
+    try:
+        return 1.0 / (1 + np.exp(-X))
+    except FloatingPointError:
+        return np.where(X > np.zeros(X.shape), np.ones(X.shape), np.zeros(X.shape))
+
+
+def softmax(X):
+    X = X - np.max(X, axis=-1, keepdims=True)
+    delta = 10e-10
+    return np.exp(X) / (np.sum(np.exp(X), axis=-1, keepdims=True) + delta)
+
+
+def RELU(X):
+    return np.where(X > np.zeros(X.shape), X, np.zeros(X.shape))
+
+
+def LRELU(X):
+    delta = 10e-4
+    return np.where(X > np.zeros(X.shape), X, delta * X)
+
+
+def derivate(func):
+    if func.__name__ == "RELU":
+
+        def func(X):
+            return np.where(X > 0, 1, 0)
+
+        return func
+
+    elif func.__name__ == "LRELU":
+
+        def func(X):
+            delta = 10e-4
+            return np.where(X > 0, 1, delta)
+
+        return func
+
+    else:
+        return elementwise_grad(func)
+
+
+# End of activation functions
 #==================================================================
 
 def general_gradient_descent(X, y, beta, scheduler,
@@ -397,31 +450,25 @@ def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBO
 
     return beta, scores
 
-
-def sigmoid(z):
+def sigmoid_th(z):
     f = lambda z: 1 / (1 + np.exp(-z))
     vf = np.vectorize(f)
     return vf(z)
-
 
 def sigmoid_derivated(z):
     f = lambda z: sigmoid(z) * (1 - sigmoid(z))
     vf = np.vectorize(f)
     return vf(z)
 
-
-def identity(z):
+def identity_th(z):
     f = lambda z: z
     vf = np.vectorize(f)
     return vf(z)
-
 
 def identity_derived(z):
     f = lambda z: 1
     vf = np.vectorize(f)
     return vf(z)
-
-
 
 def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
 
@@ -458,10 +505,3 @@ def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
         scores.append(mse)
 
     return beta, scores
-
-
-
-
-
-    return 0
-

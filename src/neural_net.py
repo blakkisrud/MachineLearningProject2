@@ -52,7 +52,7 @@ class fnn():
         self.max_iterations = max_iterations
         self.epsilon = epsilon
 
-        self.layer_sizes = [dim_input] + self.dims_hiddens + [output_dim]
+        self.layer_sizes = [dim_input] + self.dims_hiddens + [dim_output]
         self.num_layers = len(self.layer_sizes)
 
 
@@ -197,7 +197,7 @@ class fnn():
             self.schedulers_weights.append(copy(scheduler))
             self.schedulers_biases.append(copy(scheduler))
 
-        X, y = resample(X, y) # Resample the data for the mini-batches
+        #X, y = resample(X, y) # Resample the data for the mini-batches
 
         for e in range(epochs):
 
@@ -207,12 +207,12 @@ class fnn():
 
                 if n == self.batches - 1:
 
-                    X_batch = X[n*batch_size:]
+                    X_batch = X[n*batch_size:,:]
                     y_batch = y[n*batch_size:]
 
                 else:
 
-                    X_batch = X[n*batch_size:(n+1)*batch_size]
+                    X_batch = X[n*batch_size:(n+1)*batch_size,:]
                     y_batch = y[n*batch_size:(n+1)*batch_size]
 
                 self.predict_feed_forward(X_batch)
@@ -305,8 +305,8 @@ if __name__ == "__main__":
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
               activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
               outcome_func_deriv=outcome_func_deriv,
-              batches=10,
-              scheduler=MomentumScheduler(lr, 0.9))
+              batches=32,
+              scheduler=AdamScheduler(lr, 0.9, 0.999))
 
     # Plot MSE for epochs for repeated random initialization
 
@@ -337,7 +337,7 @@ if __name__ == "__main__":
             net.init_random_weights_biases()
 
             loss_epochs = net.train(X, y, epochs=epochs, 
-                                    scheduler=MomentumScheduler(lr, 0.9),
+                                    scheduler=AdamScheduler(lr, 0.9, 0.999),
                                     plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
             # print(net.weights, net.biases)
 
@@ -383,10 +383,10 @@ if __name__ == "__main__":
         ax.plot(x, y, label="y")
         ax.plot(x, yhat, label="yhat")
 
-        for j in range(5):
-            net.init_random_weights_biases()
-            yhat = net.predict_feed_forward(X)
-            ax.plot(x, yhat, color="C1")
+        #for j in range(5):
+        #    net.init_random_weights_biases()
+        #    yhat = net.predict_feed_forward(X)
+        #    ax.plot(x, yhat, color="C1")
 
     if input_mode == 2:
         img_pred = yhat.reshape(img.shape)
