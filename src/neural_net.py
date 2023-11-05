@@ -22,9 +22,10 @@ from sklearn.utils import resample
 ## ITERATION 1: predict a single MNIST image by overfitting a feed-forward neural network
 
 class fnn():
-    def __init__(self, dim_input, dim_output, dims_hiddens, 
+    def __init__(self, dim_input, dim_output, dims_hiddens,
                  activation_func, outcome_func, 
-                 activation_func_deriv, outcome_func_deriv, 
+                 activation_func_deriv, outcome_func_deriv,
+                 loss_func_name="MSE",
                  learning_rate=1e-4,
                  max_iterations=1000,
                  epsilon = 1.0e-8,
@@ -33,6 +34,24 @@ class fnn():
 
         self.dim_input = dim_input
         self.dim_output = dim_output
+
+
+        self.loss_func_name = loss_func_name
+
+
+        # INITIALIZING LOSS FUNCTION
+        if loss_func_name.upper() == "MSE":
+            self.loss_func = utils.mse_loss
+            self.loss_func_deriv = utils.mse_loss_deriv
+
+        elif loss_func_name.upper() == "CROSS-ENTROPY":
+            self.loss_func = utils.cross_entropy_loss
+            self.loss_func_deriv = utils.cross_entropy_loss_deriv
+
+        else:
+            print("LOSS FUNCTION", loss_func_name, "NOT IMPLEMENTED...")
+            sys.exit()
+
 
         self.batches = batches
         self.scheduler = scheduler
@@ -116,14 +135,12 @@ class fnn():
         # print("weights", [np.shape(w) for w in self.weights])
         verbose = kwargs.get("verbose", True)
 
-        # TODO: GENERALIZE TO ARBITRARY ACTIVATION FUNCTIONS, WITH DERIVATIVES
-
-        # TODO: change to "arbitrary" cost-derivative function
         num_obs = len(y)
 
-        loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
-
-        dC = 2 * (self.activations[-1] - y)     # derivative of squared error
+        # loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
+        # dC = 2 * (self.activations[-1] - y)     # derivative of squared error
+        loss = self.loss_func(self.activations[-1], y)
+        dC = self.loss_func_deriv(self.activations[-1], y)
 
         if verbose:
             print("num layers\t", self.num_layers)
@@ -147,10 +164,7 @@ class fnn():
                 # print("HIDDEN LAYER")
                 f_deriv_zl = self.activation_func_deriv(self.weighted_inputs[l])
 
-            # print("dC, fderiv_l", dC.shape, f_deriv_zl.shape)
             delta_l = dC * f_deriv_zl
-            # print("delta_l", delta_l.shape)
-            # print("activations_l.T, delta_l", self.activations[l].T.shape, delta_l.shape)
 
 
             # cost rate of change with respect to weights and biases in layer l
@@ -234,6 +248,7 @@ class fnn():
 
         plt.show() if showplot else 0
         return loss_for_epochs
+
 
 if __name__ == "__main__":
 

@@ -12,6 +12,29 @@ from autograd import elementwise_grad
 
 
 """
+LOSS FUNCTIONS'
+- MSE 
+- CROSS-ENTROPY
+"""
+
+def mse_loss(yhat, y):
+    return np.square(yhat - y)
+
+
+
+def mse_loss_deriv(yhat, y):
+    return 2 * (yhat - y)
+
+
+def cross_entropy_loss(yhat, y):
+    return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
+
+
+def cross_entropy_loss_deriv(yhat, y):
+    return (yhat - y) / (yhat * (1 - yhat))
+
+
+"""
 
 Use the classe-implementations of the schedulers
 from the lecture notes

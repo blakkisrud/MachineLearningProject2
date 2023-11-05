@@ -29,36 +29,80 @@ from project_2_utils import RMS_propScheduler
 
 from neural_net import fnn
 
-# Where to plot
 
-plot_dir = "figs/"
+# MAIN HYPERVARIABLES
+# FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
+
+data_mode = 1           # What data to analyse (comment out before running from terminal)
+data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, Franke, terrain ?
+
+
+loss_func_name = "MSE"
+# loss_func_name = "cross-entropy"      # does not work, yet (see nn class for start of implementation)
+
+
+random_state = 42   # does nothing, yet
+
+
+plot_dir = "figs/"      # Where to plot
+
 
 # Make a directory for the test-suite
+test_plot = os.path.join(plot_dir, f"test_suite_{data_mode_names[data_mode]}")
 
-test_plot = os.path.join(plot_dir, "test_suite")
 
 if not os.path.exists(test_plot):
     os.makedirs(test_plot)
 
+
+
+while data_mode not in data_mode_names.keys():
+    data_mode = input(f"SELECT INPUT FROM {data_mode_names}")
+    try:
+        data_mode = int(data_mode)
+    except Exception as e:
+        print(*e.args)
+
+    if not data_mode in data_mode_names.keys():
+        print("Invalid input, please try again...")
+
+
+if data_mode == 1:
+    print(f"LOADING {data_mode_names[data_mode].upper()}")
+    # Set up data points
+
+    n = 1000
+    x = np.arange(0, 10, 0.01)
+
+    X = utils.one_d_design_matrix(x, 1)
+    X = X[:, 1]
+    X = X.reshape(-1, 1)
+
+    X = StandardScaler().fit_transform(X)
+
+    y = utils.simple_func(x, 1, 5, 3, noise_sigma=1.0)
+    y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
+
+    print("SHAPE x / y:", X.shape, y.shape)
+
+    outcome_func = utils.identity
+    outcome_func_deriv = utils.identity_derived
+
+
+# LOAD WISCONSIN BREAST CANCER DATASET FOR CLASSIFICATION
+elif data_mode == 2:
+    print(f"LOADING {data_mode_names[data_mode].upper()}")
+
+    # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
+    outcome_func = utils.softmax
+    outcome_func_deriv = utils.derivate(utils.softmax)
+
+    sys.exit()
+
+
+
 # Set up parameters for the FFN
 
-# Set up data points
-
-n = 1000
-x = np.arange(0, 10, 0.01)
-
-X = utils.one_d_design_matrix(x, 1)
-X = X[:,1]
-X = X.reshape(-1, 1)
-
-print(X)
-
-X = StandardScaler().fit_transform(X)
-
-y = utils.simple_func(x, 1, 5, 3, noise_sigma=1.0)
-y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
-
-print("SHAPE x / y:", X.shape, y.shape)
 
 activation_func_list = [
                         utils.sigmoid, 
@@ -75,9 +119,14 @@ schedule_list = [
                 AdamScheduler(0.1, 0.9, 0.999),
                 ]
 
+print("TESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")
+print([act.__name__ for act in activation_func_list])
+print("WITH SCHEDULERS", end="\t")
+print([type(sch) for sch in schedule_list])
+
 error_log = ""
 
-# FFN parameters
+
 
 for activation_func in activation_func_list:
 
@@ -85,6 +134,7 @@ for activation_func in activation_func_list:
 
         try:
 
+            print("\n-----------------------------")
             print("Now doing activation function: ", activation_func.__name__)
             print("Now doing scheduler: ", scheduler.__class__.__name__)
 
@@ -92,8 +142,6 @@ for activation_func in activation_func_list:
             #activation_func_deriv = utils.sigmoid_derivated
             activation_func_deriv = utils.derivate(activation_func)
 
-            outcome_func = utils.identity
-            outcome_func_deriv = utils.identity_derived
 
             # dims_hidden = [8, 8, 8]
             dims_hidden = [1]
@@ -105,8 +153,8 @@ for activation_func in activation_func_list:
             output_dim = 1  
             input_dim = 1
 
-            net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
-                      activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
+            net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr, loss_func_name=loss_func_name,
+                      activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=32,
                       scheduler=scheduler)
@@ -128,13 +176,14 @@ for activation_func in activation_func_list:
             i = 1 # Because random-init still lingers
 
             loss_final = loss_epochs[-1]
+            print(i, f"final loss ({loss_func_name}) = {loss_final:.2e}", end="\t")
             max_loss = loss_final if loss_final > max_loss else max_loss
 
             yhat = net.predict_feed_forward(X)
             mse = mean_squared_error(y, yhat)
             mse2 = mean_squared_error(y, net.activations[-1])
 
-            print(i, f"mse={mse:.2e}, {mse2:.2e}")
+            print(f"mse={mse:.2e}, {mse2:.2e}")
             print(f"weights", net.weights, "biases", net.biases)
 
             nrand = 1
@@ -155,7 +204,7 @@ for activation_func in activation_func_list:
             ax.legend()
             ax1.legend()
 
-            fname = os.path.join(test_plot, f"test_suite_{name_of_act_func}_{name_of_scheduler}.png")
+            fname = os.path.join(test_plot, f"test_suite_{name_of_act_func}_{name_of_scheduler}_loss={loss_func_name}.png")
 
             fig.suptitle(title)
 
