@@ -14,18 +14,17 @@ import autograd.numpy as np
 
 from sklearn.datasets import load_digits
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.metrics import mean_squared_error
 
 from matplotlib import pyplot as plt
-
+                    
 from sklearn.utils import resample
 
 ## ITERATION 1: predict a single MNIST image by overfitting a feed-forward neural network
 
 class fnn():
-    def __init__(self, dim_input, dim_output, dims_hiddens,
-                 activation_func, outcome_func,
-                 activation_func_deriv, outcome_func_deriv,
+    def __init__(self, dim_input, dim_output, dims_hiddens, 
+                 activation_func, outcome_func, 
+                 activation_func_deriv, outcome_func_deriv, 
                  learning_rate=1e-4,
                  max_iterations=1000,
                  epsilon = 1.0e-8,
@@ -115,7 +114,7 @@ class fnn():
     def backpropagate(self, y, **kwargs):
         # print("activations", [np.shape(a) for a in self.activations])
         # print("weights", [np.shape(w) for w in self.weights])
-        verbose = kwargs.get("verbose", False)
+        verbose = kwargs.get("verbose", True)
 
         # TODO: GENERALIZE TO ARBITRARY ACTIVATION FUNCTIONS, WITH DERIVATIVES
 
@@ -183,6 +182,7 @@ class fnn():
         if plot or figax:
             fig, ax = figax
 
+            showplot = kwargs.get("showplot", False)
             plot = True
 
         # fig, ax = plt.subplots() if plot else (0, 0)
@@ -197,22 +197,22 @@ class fnn():
             self.schedulers_weights.append(copy(scheduler))
             self.schedulers_biases.append(copy(scheduler))
 
-        X, y = resample(X, y) # Resample the data for the mini-batches
+        #X, y = resample(X, y) # Resample the data for the mini-batches
 
         for e in range(epochs):
 
-            print(f"epoch {e}", end="\r")
+            print(f"epoch {e}", end="\r") 
 
             for n in range(self.batches):
 
                 if n == self.batches - 1:
 
-                    X_batch = X[n*batch_size:]
+                    X_batch = X[n*batch_size:,:]
                     y_batch = y[n*batch_size:]
 
                 else:
 
-                    X_batch = X[n*batch_size:(n+1)*batch_size]
+                    X_batch = X[n*batch_size:(n+1)*batch_size,:]
                     y_batch = y[n*batch_size:(n+1)*batch_size]
 
                 self.predict_feed_forward(X_batch)
@@ -223,7 +223,7 @@ class fnn():
             for n in range(len(self.weights)):
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
-
+            
             print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}", self.weights, self.biases) if kwargs.get("verbose", 0) else 0
 
             loss_for_epochs.append(np.mean(loss))
@@ -238,10 +238,10 @@ class fnn():
 if __name__ == "__main__":
 
     input_mode = 1
-    valid_inputs = [1, 2, 3]
+    valid_inputs = [1, 2]
 
     while input_mode not in valid_inputs:
-        input_mode = input("SELECT INPUT: 1 = simple one-dimensional function, 2 = single MNIST digits image, 3 = Wisconsin breast cancer dataset, 4 = franke function (not implemented), 5 = terrain image (not implemented)\n")
+        input_mode = input("SELECT INPUT: 1 = simple one-dimensional function, 2 = single MNIST digits image, 3 = franke function (not implemented), 4 = terrain image (not implemented)\n")
         try:
             input_mode = int(input_mode)
         except Exception as e:
@@ -264,10 +264,8 @@ if __name__ == "__main__":
         input_dim = 1
         # plt.plot(x, y)
         # plt.show()
-        y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
 
-
-    # SINGLE MNIST-IMAGE R2 -> R2
+    # LOAD SINGLE MNIST-IMAGE R2 -> R2
     if input_mode == 2:
         print("LOADING SINGLE MNIST IMAGE")
         dataset_digits = load_digits()
@@ -278,33 +276,13 @@ if __name__ == "__main__":
         y = img.ravel()
         X = np.arange(0, len(y)).reshape(1, -1)
 
-        y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(1, -1)
-
-
         # use all pixels for both training and testing
         # TODO: implement 2-dimensional design matrix
         input_dim = np.prod(img.shape)
         output_dim = np.prod(img.shape)
 
 
-    # classification R30 -> R1
-    if input_mode == 3:
-        print("LOADING Wisconsin Breast Cancer data set")
-        from sklearn.datasets import load_breast_cancer
-        X, y = load_breast_cancer(return_X_y=True, as_frame=True)
-        print(X.shape, y.shape)
-        print("features = ", X.columns.values)
-        counts_out =  np.unique(y, return_counts=True)
-        print(counts_out)
-        print(y)
-        print(f"outcome balance: num {counts_out[0][0]} = {counts_out[1][0]}, num {counts_out[0][1]} = {counts_out[1][1]}")
-
-
-
-        sys.exit()
-        pass
-
-
+    y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
     num_obs = len(y)
     print("SHAPE x / y:", X.shape, y.shape)
 
@@ -325,10 +303,10 @@ if __name__ == "__main__":
     epochs = 100
 
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
-              activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
+              activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
               outcome_func_deriv=outcome_func_deriv,
-              batches=10,
-              scheduler=MomentumScheduler(lr, 0.9))
+              batches=32,
+              scheduler=AdamScheduler(lr, 0.9, 0.999))
 
     # Plot MSE for epochs for repeated random initialization
 
@@ -343,8 +321,9 @@ if __name__ == "__main__":
     savename = f"nn={net.layer_sizes}_lr={net.learning_rate}.png"
     fig_path = os.path.join(fig_folder, savename)
 
+    from sklearn.metrics import mean_squared_error
 
-    if plot and input_mode == 1:
+    if plot:
         fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
         ax, ax1 = ax
         ax1.set_ylim(0, 1)
@@ -357,8 +336,8 @@ if __name__ == "__main__":
         for i in range(nrand):
             net.init_random_weights_biases()
 
-            loss_epochs = net.train(X, y, epochs=epochs,
-                                    scheduler=MomentumScheduler(lr, 0.9),
+            loss_epochs = net.train(X, y, epochs=epochs, 
+                                    scheduler=AdamScheduler(lr, 0.9, 0.999),
                                     plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
             # print(net.weights, net.biases)
 
@@ -366,14 +345,13 @@ if __name__ == "__main__":
             max_loss = loss_final if loss_final > max_loss else max_loss
 
             yhat = net.predict_feed_forward(X)
-
             mse = mean_squared_error(y, yhat)
             mse2 = mean_squared_error(y, net.activations[-1])
             print(i, f"mse={mse:.2e}, {mse2:.2e}")
             print(f"weights", net.weights, "biases", net.biases)
 
 
-            ax.plot(list(range(len(loss_epochs))), loss_epochs, "x", c=f"C{i}", label=i)
+            ax.plot(list(range(len(loss_epochs))), loss_epochs, c=f"C{i}", label=i)
             ax1.plot(x, yhat, c=f"C{i}", label=i)
 
 
@@ -393,24 +371,22 @@ if __name__ == "__main__":
         fig.savefig(fig_path)
         plt.show()
 
+
     for wi, bi in zip(net.weights, net.biases):
         print(wi.shape, bi.shape)
 
     yhat = net.predict_feed_forward(X)
-    net.train(X, y, epochs=epochs, verbose=True)
-    yhat = net.predict_feed_forward(X)
     print(yhat.shape)
-
 
     if input_mode == 1:
         fig, ax = plt.subplots()
         ax.plot(x, y, label="y")
         ax.plot(x, yhat, label="yhat")
 
-        for j in range(5):
-            net.init_random_weights_biases()
-            yhat = net.predict_feed_forward(X)
-            ax.plot(x, yhat, color="C1")
+        #for j in range(5):
+        #    net.init_random_weights_biases()
+        #    yhat = net.predict_feed_forward(X)
+        #    ax.plot(x, yhat, color="C1")
 
     if input_mode == 2:
         img_pred = yhat.reshape(img.shape)
