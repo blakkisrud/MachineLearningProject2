@@ -19,7 +19,6 @@ from matplotlib import pyplot as plt
                     
 from sklearn.utils import resample
 
-## ITERATION 1: predict a single MNIST image by overfitting a feed-forward neural network
 
 class fnn():
     def __init__(self, dim_input, dim_output, dims_hiddens,
@@ -142,6 +141,11 @@ class fnn():
         loss = self.loss_func(self.activations[-1], y)
         dC = self.loss_func_deriv(self.activations[-1], y)
 
+        # print(loss.shape, np.mean(loss))
+        # print(dC.shape, np.mean(dC))
+        # sys.exit()
+
+
         if verbose:
             print("num layers\t", self.num_layers)
             print("weights\t", [np.shape(w) for w in self.weights])
@@ -204,8 +208,8 @@ class fnn():
 
         batch_size = X.shape[0] // self.batches
 
-        print("Using the scheduler")
-        print("scheduler", scheduler)
+        print("TRAINING NETWORK using the scheduler\t", scheduler)
+        print(f"\twith {self.batches} batches of size {batch_size}")
 
         for n in range(len(self.weights)):
             self.schedulers_weights.append(copy(scheduler))
