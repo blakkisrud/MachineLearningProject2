@@ -323,9 +323,6 @@ def find_optimal_epochs_kfold(net, X, y, epochs_max=1000, k=3, random_state=42):
     plt.show()
     # sys.exit()
     pass
-
-    plt.show() if showplot else 0
-    return loss_for_epochs
     
     def evaluate(self, validation_data_X, validation_data_y):
         pass
