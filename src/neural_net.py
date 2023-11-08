@@ -306,6 +306,7 @@ class fnn():
     def evaluate(self, validation_data_X, validation_data_y):
         pass
 
+
 if __name__ == "__main__":
 
     input_mode = 2
