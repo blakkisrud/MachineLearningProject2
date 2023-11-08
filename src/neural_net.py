@@ -303,7 +303,8 @@ class fnn():
         else:
             return epochs_opt, loss_training, loss_validation
 
-
+    def evaluate(self, validation_data_X, validation_data_y):
+        pass
 
 if __name__ == "__main__":
 
