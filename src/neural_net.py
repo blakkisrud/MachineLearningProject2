@@ -216,7 +216,7 @@ class fnn():
 
         for e in range(epochs):
 
-            print(f"epoch {e}", end="\r")
+            print(f"epoch {e}", end="\r") 
             loss_for_batches = []
             loss_for_batches_test = []
             for n in range(self.batches):
@@ -302,6 +302,7 @@ class fnn():
             return epochs_opt
         else:
             return epochs_opt, loss_training, loss_validation
+
 
 
 if __name__ == "__main__":
