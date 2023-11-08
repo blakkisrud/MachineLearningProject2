@@ -7,9 +7,13 @@ from project_2_utils import MomentumScheduler
 from project_2_utils import AdagradScheduler
 from project_2_utils import RMS_propScheduler
 from project_2_utils import AdamScheduler
+
+from sklearn.linear_model import Ridge
+import seaborn as sns    
 from sklearn.metrics import mean_squared_error
 
 from copy import deepcopy, copy
+from sklearn.metrics import mean_squared_error
 
 import autograd.numpy as np
 
@@ -27,6 +31,8 @@ class fnn():
                  activation_func_deriv, outcome_func_deriv,
                  loss_func_name="MSE",
                  learning_rate=1e-4,
+                 lmbd = 0.0,
+                 max_iterations=1000,
                  epsilon = 1.0e-8,
                  batches = 1,
                  scheduler=None, random_state=42):
@@ -37,15 +43,21 @@ class fnn():
         self.random_state = random_state
 
         self.loss_func_name = loss_func_name
-
+        self.lmbd = lmbd
 
         # INITIALIZING LOSS FUNCTION
         if loss_func_name.upper() == "MSE":
-            self.loss_func = utils.mse_loss
+            if self.lmbd == 0.0:
+                self.loss_func = utils.mse_loss
+            else:
+                self.loss_func = utils.MSE_L2
             self.loss_func_deriv = utils.mse_loss_deriv
 
         elif loss_func_name.upper() == "CROSS-ENTROPY":
-            self.loss_func = utils.cross_entropy_loss
+            if self.lmbd == 0.0:
+                self.loss_func = utils.cross_entropy_loss
+            else:
+                self.loss_func = utils.cross_entropy_loss_L2
             self.loss_func_deriv = utils.cross_entropy_loss_deriv
 
         else:
@@ -138,7 +150,10 @@ class fnn():
 
         # loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
         # dC = 2 * (self.activations[-1] - y)     # derivative of squared error
-        loss = self.loss_func(self.activations[-1], y)
+        if self.lmbd == 0.0:
+            loss = self.loss_func(self.activations[-1], y)
+        else:
+            loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights)
         dC = self.loss_func_deriv(self.activations[-1], y)
 
         # print(loss.shape, np.mean(loss))
@@ -168,12 +183,14 @@ class fnn():
                 # print("HIDDEN LAYER")
                 f_deriv_zl = self.activation_func_deriv(self.weighted_inputs[l])
 
-            delta_l = dC * f_deriv_zl
+            if self.lmbd == 0.0:
+                delta_l = dC * f_deriv_zl 
+            else: 
+                delta_l = dC * f_deriv_zl# + self.lmbd * np.sum(self.weights)
 
 
             # cost rate of change with respect to weights and biases in layer l
-
-            dW = np.dot(self.activations[l].T, delta_l)
+            dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*sum(np.sum(w) for w in self.weights)
             db = np.sum(delta_l, axis=0)
 
             # Would dW and db be the gradiants?
@@ -315,7 +332,7 @@ class fnn():
 
 if __name__ == "__main__":
 
-    input_mode = 2
+    input_mode = 1
     valid_inputs = [1, 2]
 
     while input_mode not in valid_inputs:
@@ -373,20 +390,56 @@ if __name__ == "__main__":
     outcome_func = utils.identity
     outcome_func_deriv = utils.identity_derived
 
-    # dims_hidden = [8, 8, 8]
-    dims_hidden = [4]
-    # dims_hidden = []
+    #dims_hidden = [8, 8, 8]
+    #dims_hidden = [4]
+    dims_hidden = []
 
     lr = 0.1
     epochs = 100
+    search_values = False
+
+    if search_values == True:
+        eta_vals = np.logspace(-5, 1, 7)
+        lmbd_vals = np.logspace(-5, 1, 7)
+        # store the models for later use
+        DNN_numpy = np.zeros((len(eta_vals), len(lmbd_vals)), dtype=object)
+        mse_list = np.zeros((len(eta_vals), len(lmbd_vals)))
+        fig, ax = plt.subplots(figsize = (10, 10))    
+
+        # grid search
+        for i, eta in enumerate(eta_vals):
+            for j, lmbd in enumerate(lmbd_vals):
+                dnn = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=eta,
+                activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
+                outcome_func_deriv=outcome_func_deriv,
+                lmbd = lmbd,
+                batches=32,
+                scheduler=AdamScheduler(eta, 0.9, 0.999))
+                dnn.train(X, y, epochs=epochs, 
+                                        scheduler=AdamScheduler(eta, 0.9, 0.999),
+                                        plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {dnn.learning_rate}", verbose=False)
+        
+                DNN_numpy[i][j] = dnn
+                yhat = dnn.predict_feed_forward(X)
+                mse = mean_squared_error(y, yhat)
+                mse_list[i][j] = mse
+        sns.heatmap(mse_list, annot=True, ax=ax, cmap="viridis")
+        ax.set_title("Training Accuracy")
+        ax.set_ylabel("$\eta$")
+        ax.set_xlabel("$\lambda$")
+        plt.savefig('Accuracy board.png')
+        plt.show()
+
+
 
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
               activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
               outcome_func_deriv=outcome_func_deriv,
               batches=32,
+              lmbd = 0.001, 
               scheduler=AdamScheduler(lr, 0.9, 0.999))
 
-    net.find_optimal_epochs_kfold(X, y)
+    #net.find_optimal_epochs_kfold(X, y)
 
     # Plot MSE for epochs for repeated random initialization
 
@@ -430,8 +483,17 @@ if __name__ == "__main__":
 
 
             ax.plot(list(range(len(loss_epochs))), loss_epochs, c=f"C{i}", label=i)
-            ax1.plot(x, yhat, c=f"C{i}", label=i)
+        ax1.plot(x, yhat, c=f"C{i}", label=i)
 
+        # Compare to Ridge regression    
+        clf = Ridge(alpha=0.1)
+        x1 = x.reshape(-1,1)
+        y1 = y.reshape(-1,1)
+        clf.fit(x1, y1)
+        y_pred = clf.predict(x1)
+        mse = mean_squared_error(y_pred, y)
+        print(f'MSE Ridge regression: {mse:.2}')
+        ax1.plot(x, y_pred, linewidth=linewidth, c="orange", zorder=1, label='Ridge regression')
 
         ax1.plot(x, y, linewidth=linewidth, c="black", zorder=0)
         # ax.plot([0, epochs], [0, 0], linewidth=linewidth, c="black", zorder=0)
