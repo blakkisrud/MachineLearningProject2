@@ -29,11 +29,12 @@ class fnn():
                  max_iterations=1000,
                  epsilon = 1.0e-8,
                  batches = 1,
-                 scheduler=None):
+                 scheduler=None, random_state=42):
 
         self.dim_input = dim_input
         self.dim_output = dim_output
 
+        self.random_state = random_state
 
         self.loss_func_name = loss_func_name
 
@@ -53,7 +54,7 @@ class fnn():
 
 
         self.batches = batches
-        self.scheduler = scheduler
+        self.scheduler = scheduler if not scheduler == None else utils.ConstantScheduler(eta=learning_rate)
 
         self.dims_hiddens = dims_hiddens    # tuple of neurons per hidden layer, e.g. (8) for single layer or (16, 8, 8) for three hidden layers
         self.num_hidden_layers = len(dims_hiddens)
@@ -132,7 +133,7 @@ class fnn():
     def backpropagate(self, y, **kwargs):
         # print("activations", [np.shape(a) for a in self.activations])
         # print("weights", [np.shape(w) for w in self.weights])
-        verbose = kwargs.get("verbose", True)
+        verbose = kwargs.get("verbose", False)
 
         num_obs = len(y)
 
@@ -194,14 +195,9 @@ class fnn():
         return loss
 
 
-    def train(self, X, y, scheduler, epochs=100, **kwargs):
-        plot = kwargs.get("plot")
-        figax = kwargs.get("figax", (0, 0))
-        if plot or figax:
-            fig, ax = figax
-
-            showplot = kwargs.get("showplot", False)
-            plot = True
+    def train(self, X, y, X_val=None, y_val=None, scheduler=None, epochs=100, **kwargs):
+        if scheduler == None:
+            scheduler = self.scheduler
 
         # fig, ax = plt.subplots() if plot else (0, 0)
         loss_for_epochs = []
@@ -220,7 +216,7 @@ class fnn():
         for e in range(epochs):
 
             print(f"epoch {e}", end="\r") 
-
+            loss_for_batches = []
             for n in range(self.batches):
 
                 if n == self.batches - 1:
@@ -235,28 +231,104 @@ class fnn():
 
                 self.predict_feed_forward(X_batch)
                 loss = self.backpropagate(y_batch, **kwargs)
-
+                loss_for_batches.append(np.mean(loss))
             # After the epoch is done, we can reset the scheduler
 
             for n in range(len(self.weights)):
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
             
-            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}", self.weights, self.biases) if kwargs.get("verbose", 0) else 0
+            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}") if kwargs.get("verbose", 0) else 0
+            # loss_for_epochs.append(np.mean(loss))
+            loss_for_epochs.append(np.mean(loss_for_batches))
 
-            loss_for_epochs.append(np.mean(loss))
-
-        ax.plot(list(range(epochs)), loss_for_epochs) if plot else 0
-        ax.set_title(kwargs.get("plot_title")) if plot else 0
-        ax.set_xlabel(kwargs.get("plot_xlabel")) if plot else 0
-
-        plt.show() if showplot else 0
         return loss_for_epochs
+
+    def find_optimal_epochs_kfold(self, X, y, epochs_max=100, k=3, **kwargs):
+        from sklearn.model_selection import KFold
+
+        # NOT FINISHED!!!!
+
+        plot = kwargs.get("plot", True)
+
+        # Training / validation average loss over epochs for each fold k
+        loss_training = []
+        loss_validation = []
+
+        for ind_train, ind_val in KFold(n_splits=k).split(X, y):
+            x_train, y_train = X[ind_train], y[ind_train]
+            x_val, y_val = X[ind_val], y[ind_val]
+            print(x_train.shape, x_val.shape)
+
+            self.init_random_weights_biases()   # reset weights and biases
+
+            loss_train_k = self.train(x_train, y_train, epochs=epochs_max)
+            yhat_val = self.predict_feed_forward(x_val)
+            loss_val_k = self.loss_func(yhat_val, y_val).reshape(-1)
+
+            loss_training.append(loss_train_k)
+            loss_validation.append(loss_val_k)
+            print(loss_val_k.shape)
+
+        # print(np.mean(loss_validation, axis=0))
+        sys.exit()
+        epochs_opt = np.argmin(np.mean(loss_validation, axis=0))
+        print(epochs_opt)
+
+        print(f"optimal max epochs = {epochs_opt}")
+
+        if plot:
+            epochs = list(range(1, epochs_max + 1))
+            fig_ep, ax_ep = plt.subplots(ncols=2)
+            ax_ep[0].set_title("Training loss")
+            ax_ep[1].set_title("Validation loss")
+
+            for i in range(k):
+                ax_ep[0].plot(epochs, loss_training[i], c=f"C{i}")
+                ax_ep[1].plot(epochs, loss_validation[i], c=f"C{i}")
+
+            plt.show()
+        pass
+
+
+def find_optimal_epochs_kfold(net, X, y, epochs_max=1000, k=3, random_state=42):
+    # finds optimal epochs to train network
+    # by dividing train into k validation sets to find the optimal loss on unseen data
+    from sklearn.model_selection import KFold
+
+    i = 0
+    loss_val = []
+
+    for ind_train, ind_val in KFold(n_splits=k).split(X, y):
+        x_train, y_train = X[ind_train], y[ind_train]
+        x_val, y_val = X[ind_val], y[ind_val]
+
+        print(x_train.shape, y_train.shape)
+        print(x_val.shape, y_val.shape)
+
+        loss_i = net.train(x_val, y_val, epochs=epochs_max, verbose=False)
+        loss_val.append(loss_i)
+        i += 1
+
+    loss_val_means = np.mean(loss_val, axis=0)
+    print(loss_val_means.shape)
+    epoch_opt = np.argmin(loss_val_means)
+    print("optimal epochs =", epoch_opt)
+
+    fig, ax = plt.subplots()
+    epochs = list(range(1, epochs_max + 1))
+    for lossi in loss_val:
+        ax.plot(epochs, lossi)
+
+    plt.show()
+    # sys.exit()
+    pass
+
 
 
 if __name__ == "__main__":
 
-    input_mode = 1
+    input_mode = 2
     valid_inputs = [1, 2]
 
     while input_mode not in valid_inputs:
@@ -315,7 +387,7 @@ if __name__ == "__main__":
     outcome_func_deriv = utils.identity_derived
 
     # dims_hidden = [8, 8, 8]
-    dims_hidden = [1]
+    dims_hidden = [4]
     # dims_hidden = []
 
     lr = 0.1
@@ -326,6 +398,8 @@ if __name__ == "__main__":
               outcome_func_deriv=outcome_func_deriv,
               batches=32,
               scheduler=AdamScheduler(lr, 0.9, 0.999))
+
+    net.find_optimal_epochs_kfold(X, y)
 
     # Plot MSE for epochs for repeated random initialization
 
