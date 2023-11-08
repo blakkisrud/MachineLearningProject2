@@ -7,6 +7,7 @@ from project_2_utils import MomentumScheduler
 from project_2_utils import AdagradScheduler
 from project_2_utils import RMS_propScheduler
 from project_2_utils import AdamScheduler
+from sklearn.metrics import mean_squared_error
 
 from copy import deepcopy, copy
 
@@ -26,7 +27,6 @@ class fnn():
                  activation_func_deriv, outcome_func_deriv,
                  loss_func_name="MSE",
                  learning_rate=1e-4,
-                 max_iterations=1000,
                  epsilon = 1.0e-8,
                  batches = 1,
                  scheduler=None, random_state=42):
@@ -68,7 +68,6 @@ class fnn():
         self.schedulers_weights = []
         self.schedulers_biases = []
 
-        self.max_iterations = max_iterations
         self.epsilon = epsilon
 
         self.layer_sizes = [dim_input] + self.dims_hiddens + [dim_output]
@@ -303,8 +302,15 @@ class fnn():
         else:
             return epochs_opt, loss_training, loss_validation
 
-    def evaluate(self, validation_data_X, validation_data_y):
-        pass
+    def evaluate(self, evaluation_X, evaluation_y):
+
+        yhat = self.predict_feed_forward(evaluation_X)
+
+        mse = mean_squared_error(evaluation_y, yhat)
+
+        #TODO: Do accuracy instead
+
+        return mse
 
 
 if __name__ == "__main__":
@@ -394,8 +400,6 @@ if __name__ == "__main__":
     title = f"hidden dims = {net.dims_hiddens}, repeated with random initiation {nrand} times, eta={net.learning_rate:.3e}, N_obs={num_obs}"
     savename = f"nn={net.layer_sizes}_lr={net.learning_rate}.png"
     fig_path = os.path.join(fig_folder, savename)
-
-    from sklearn.metrics import mean_squared_error
 
     if plot:
         fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
