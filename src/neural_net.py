@@ -252,6 +252,9 @@ class fnn():
 
         plt.show() if showplot else 0
         return loss_for_epochs
+    
+    def evaluate(self, validation_data_X, validation_data_y):
+        pass
 
 
 if __name__ == "__main__":
