@@ -195,12 +195,13 @@ class fnn():
         return loss
 
 
-    def train(self, X, y, X_val=None, y_val=None, scheduler=None, epochs=100, **kwargs):
+    def train(self, X, y, X_test=[], y_test=[], scheduler=None, epochs=100, **kwargs):
         if scheduler == None:
             scheduler = self.scheduler
+        verbose = kwargs.get("verbose", False)
 
-        # fig, ax = plt.subplots() if plot else (0, 0)
         loss_for_epochs = []
+        loss_for_epochs_test = []   # only returns if y_val is not None
 
         batch_size = X.shape[0] // self.batches
 
@@ -215,8 +216,9 @@ class fnn():
 
         for e in range(epochs):
 
-            print(f"epoch {e}", end="\r") 
+            print(f"epoch {e}", end="\r")
             loss_for_batches = []
+            loss_for_batches_test = []
             for n in range(self.batches):
 
                 if n == self.batches - 1:
@@ -232,50 +234,58 @@ class fnn():
                 self.predict_feed_forward(X_batch)
                 loss = self.backpropagate(y_batch, **kwargs)
                 loss_for_batches.append(np.mean(loss))
-            # After the epoch is done, we can reset the scheduler
+                # print(loss.shape, loss_for_batches)
+                # sys.exit()
 
+                if any(y_test):
+                    self.predict_feed_forward(X_test)
+                    loss_test = self.loss_func(self.activations[-1], y_test)
+                    loss_for_batches_test.append(loss_test)
+
+
+            # After the epoch is done, we can reset the scheduler
             for n in range(len(self.weights)):
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
-            
-            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}") if kwargs.get("verbose", 0) else 0
+
+            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}") if verbose else 0
             # loss_for_epochs.append(np.mean(loss))
             loss_for_epochs.append(np.mean(loss_for_batches))
 
-        return loss_for_epochs
+            if any(y_test):
+                loss_for_epochs_test.append(np.mean(loss_for_batches_test))
 
-    def find_optimal_epochs_kfold(self, X, y, epochs_max=100, k=3, **kwargs):
+        if not any(y_test):
+            return loss_for_epochs
+        else:
+            return loss_for_epochs, loss_for_epochs_test
+
+    def find_optimal_epochs_kfold(self, X, y, epochs_max=int(2e3), k=3, **kwargs):
         from sklearn.model_selection import KFold
 
-        # NOT FINISHED!!!!
-
+        return_loss_values = kwargs.get("return_loss_values", False)
         plot = kwargs.get("plot", True)
+
+        print(f"FINDING optimal number of epochs using {k}-fold validation")
 
         # Training / validation average loss over epochs for each fold k
         loss_training = []
         loss_validation = []
 
-        for ind_train, ind_val in KFold(n_splits=k).split(X, y):
+        for ind_train, ind_val in KFold(n_splits=k, shuffle=True, random_state=self.random_state).split(X, y):
             x_train, y_train = X[ind_train], y[ind_train]
             x_val, y_val = X[ind_val], y[ind_val]
             print(x_train.shape, x_val.shape)
 
             self.init_random_weights_biases()   # reset weights and biases
 
-            loss_train_k = self.train(x_train, y_train, epochs=epochs_max)
-            yhat_val = self.predict_feed_forward(x_val)
-            loss_val_k = self.loss_func(yhat_val, y_val).reshape(-1)
+            loss_train_k, loss_val_k = self.train(x_train, y_train, X_test=x_val, y_test=y_val, epochs=epochs_max, **kwargs)
 
             loss_training.append(loss_train_k)
             loss_validation.append(loss_val_k)
-            print(loss_val_k.shape)
 
-        # print(np.mean(loss_validation, axis=0))
-        sys.exit()
-        epochs_opt = np.argmin(np.mean(loss_validation, axis=0))
-        print(epochs_opt)
-
-        print(f"optimal max epochs = {epochs_opt}")
+        epochs_opt = np.argmin(np.mean(loss_validation, axis=0)) + 1
+        print("optimal number of epochs = ", epochs_opt)
 
         if plot:
             epochs = list(range(1, epochs_max + 1))
@@ -288,42 +298,10 @@ class fnn():
                 ax_ep[1].plot(epochs, loss_validation[i], c=f"C{i}")
 
             plt.show()
-        pass
-
-
-def find_optimal_epochs_kfold(net, X, y, epochs_max=1000, k=3, random_state=42):
-    # finds optimal epochs to train network
-    # by dividing train into k validation sets to find the optimal loss on unseen data
-    from sklearn.model_selection import KFold
-
-    i = 0
-    loss_val = []
-
-    for ind_train, ind_val in KFold(n_splits=k).split(X, y):
-        x_train, y_train = X[ind_train], y[ind_train]
-        x_val, y_val = X[ind_val], y[ind_val]
-
-        print(x_train.shape, y_train.shape)
-        print(x_val.shape, y_val.shape)
-
-        loss_i = net.train(x_val, y_val, epochs=epochs_max, verbose=False)
-        loss_val.append(loss_i)
-        i += 1
-
-    loss_val_means = np.mean(loss_val, axis=0)
-    print(loss_val_means.shape)
-    epoch_opt = np.argmin(loss_val_means)
-    print("optimal epochs =", epoch_opt)
-
-    fig, ax = plt.subplots()
-    epochs = list(range(1, epochs_max + 1))
-    for lossi in loss_val:
-        ax.plot(epochs, lossi)
-
-    plt.show()
-    # sys.exit()
-    pass
-
+        if not return_loss_values:
+            return epochs_opt
+        else:
+            return epochs_opt, loss_training, loss_validation
 
 
 if __name__ == "__main__":
