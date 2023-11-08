@@ -18,7 +18,7 @@ from random import random, seed
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, accuracy_score, roc_auc_score
 
 import project_2_utils as utils
 from project_2_utils import ConstantScheduler
@@ -27,7 +27,7 @@ from project_2_utils import AdamScheduler
 from project_2_utils import AdagradScheduler
 from project_2_utils import RMS_propScheduler
 
-from neural_net import fnn
+from neural_net import fnn, find_optimal_epochs_kfold
 
 
 # MAIN HYPERVARIABLES
@@ -48,8 +48,8 @@ epochs = 1000
 num_batches = 4
 
 
-# loss_func_name = "MSE"
-loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
+loss_func_name = "MSE"
+# loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
 
 
 random_state = 42   # does nothing, yet
@@ -128,8 +128,6 @@ elif data_mode == 2:
     # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
     # outcome_func = utils.softmax
     # outcome_func_deriv = utils.derivate(utils.softmax)
-
-
     outcome_func = utils.sigmoid
     outcome_func_deriv = utils.derivate(utils.sigmoid)
 
@@ -147,9 +145,9 @@ activation_func_list = [
 schedule_list = [
                 ConstantScheduler(0.1),
                 MomentumScheduler(0.1, 0.9),
-                AdagradScheduler(0.1),
-                RMS_propScheduler(0.1, 0.9),
-                AdamScheduler(0.1, 0.9, 0.999),
+                # AdagradScheduler(0.1),
+                # RMS_propScheduler(0.1, 0.9),
+                # AdamScheduler(0.1, 0.9, 0.999),
                 ]
 
 print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")
@@ -179,14 +177,12 @@ for activation_func in activation_func_list:
                       activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=num_batches,
-                      scheduler=scheduler)
+                      scheduler=scheduler, random_state=random_state)
 
             nrand = 1
             name_of_act_func = activation_func.__name__
             name_of_scheduler = scheduler.__class__.__name__
-
-            title = f"hidden dims = {net.dims_hiddens}, eta={net.learning_rate:.3e}, N_obs={num_obs}" + " " + name_of_act_func + " " + name_of_scheduler + f" loss={loss_func_name}"
-            fname = os.path.join(plot_folder, f"test_suite_{name_of_act_func}_{name_of_scheduler}_loss={loss_func_name}.png")
+            name_of_out_func = outcome_func.__name__
 
             fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
             ax, ax1 = ax
@@ -195,11 +191,17 @@ for activation_func in activation_func_list:
 
             linewidth = 4.0
 
-            net.init_random_weights_biases()
 
-            loss_epochs = net.train(X, y, epochs=epochs, 
-                                scheduler=scheduler,
-                                plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
+            net.init_random_weights_biases()
+            # net.find_optimal_epochs_kfold(X, y, k=3)
+
+            # find_optimal_epochs_kfold(net, X, y, k=3, random_state=random_state)
+
+
+            loss_epochs = net.train(X, y, epochs=epochs,
+                                    scheduler=scheduler,
+                                    verbose=False)
+            # sys.exit()
 
             i = 1 # Because random-init still lingers
 
@@ -209,11 +211,22 @@ for activation_func in activation_func_list:
 
             yhat = net.predict_feed_forward(X)
             mse = mean_squared_error(y, yhat)
-            mse2 = mean_squared_error(y, net.activations[-1])
 
-            print(f"mse={mse:.2e}, {mse2:.2e}")
+            title = f"hidden dims = {net.dims_hiddens}, eta={net.learning_rate:.3e}, N_obs={num_obs}" + " act=" + name_of_act_func + " " + name_of_scheduler + " out=" + name_of_out_func + " " + f" loss={loss_func_name}"
+            fname = os.path.join(plot_folder, f"{name_of_act_func}_{name_of_scheduler}_{name_of_out_func}_{loss_func_name}.png")
+
+            if data_mode == 2:
+                # acc = accuracy_score(y, yhat)
+                auc = roc_auc_score(y, yhat)
+                print(f"mse={mse:.2e}, auc={auc:.3f}")
+                title += f"\nmse={mse:.2e}, auc={auc:.2f}"
+            else:
+                print(f"mse={mse:.2e}")
+                title += f"\nmse={mse:.2e}"
+
+
+
             # print(f"weights", net.weights, "biases", net.biases)
-
 
             ax.plot(list(range(len(loss_epochs))), loss_epochs, c=f"C{i}", label=i)
             ax.set_title(f"{loss_func_name} during training")
