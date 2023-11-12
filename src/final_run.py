@@ -88,21 +88,23 @@ output_dim = 1
 input_dim = len(feature_names)
 
 lr = 0.1
-epochs = 500
-epochs_max = 500
+epochs = 100
+epochs_max = 100
 
 # Set up the list of runs here
 
-list_of_act_funcs = [utils.RELU, 
-                     utils.sigmoid, 
-                     utils.LRELU]
+list_of_act_funcs = [
+                    utils.RELU, 
+                    #utils.sigmoid, 
+                    #utils.LRELU
+                    ]
 
 list_of_schedulers = [AdamScheduler(lr, 0.9, 0.999), 
                       ConstantScheduler(lr), 
                       MomentumScheduler(lr, 0.9), 
                       RMS_propScheduler(lr, 0.9)]
 
-list_of_network_design = [[8,8]]
+list_of_network_design = [[128]]
 
 list_of_runs = []
 
@@ -135,8 +137,8 @@ for run in list_of_runs:
     activation_func = run["Act_func"]
     activation_func_deriv = run["Deriv_act_func"]
 
-    outcome_func = utils.identity
-    outcome_func_deriv = utils.identity_derived
+    outcome_func = utils.sigmoid
+    outcome_func_deriv = utils.derivate(outcome_func)
 
     dims_hidden = run["Design"]
     scheduler = run["Scheduler"]
@@ -144,7 +146,9 @@ for run in list_of_runs:
     net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
               activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
               outcome_func_deriv=outcome_func_deriv,
+              loss_func_name="CROSS-ENTROPY",
               batches=5,
+              lmbd=0,
               scheduler=scheduler)
     
     # Try to train the network

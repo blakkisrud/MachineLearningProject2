@@ -165,6 +165,7 @@ class fnn():
             loss = self.loss_func(self.activations[-1], y)
         else:
             loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights)
+
         dC = self.loss_func_deriv(self.activations[-1], y)
 
         # print(loss.shape, np.mean(loss))
