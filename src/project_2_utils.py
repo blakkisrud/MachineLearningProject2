@@ -10,6 +10,12 @@ from autograd import grad
 import matplotlib.pyplot as plt
 from autograd import elementwise_grad
 
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import mean_squared_error
+
 
 """
 LOSS FUNCTIONS'
@@ -215,6 +221,59 @@ def derivate(func):
 
 # End of activation functions
 #==================================================================
+
+def logistic_regression(X_train, y_train, X_eval, y_eval):
+
+    # Create a logistic regression model
+    model = LogisticRegression()
+
+    # Fit the model on the training data
+    model.fit(X_train, y_train)
+
+    # Make predictions on the test set
+    y_pred = model.predict(X_eval)
+
+    # Evaluate the model
+    accuracy = accuracy_score(y_eval, y_pred)
+    confusion_mat = confusion_matrix(y_eval, y_pred)
+    classification_rep = classification_report(y_eval, y_pred)
+
+    print(y_pred)
+
+    print(f"Accuracy: {accuracy}")
+    print(f"Confusion Matrix:\n{confusion_mat}")
+    print(f"Classification Report:\n{classification_rep}")
+    mse = mean_squared_error(y_eval, y_pred)
+
+    return mse, accuracy
+
+def random_forest(X_train, y_train, X_eval, y_eval):
+
+
+    # Create a logistic regression model
+    model = RandomForestClassifier(
+        random_state=42,
+        n_estimators=100)
+
+    # Fit the model on the training data
+    model.fit(X_train, y_train)
+
+    # Make predictions on the test set
+    y_pred = model.predict(X_eval)
+
+    # Evaluate the model
+    accuracy = accuracy_score(y_eval, y_pred)
+    confusion_mat = confusion_matrix(y_eval, y_pred)
+    classification_rep = classification_report(y_eval, y_pred)
+
+    print(y_pred)
+
+    print(f"Accuracy: {accuracy}")
+    print(f"Confusion Matrix:\n{confusion_mat}")
+    print(f"Classification Report:\n{classification_rep}")
+    mse = mean_squared_error(y_eval, y_pred)
+
+    return mse, accuracy
 
 def general_gradient_descent(X, y, beta, scheduler,
                              cost_func,

@@ -18,6 +18,9 @@ from project_2_utils import AdamScheduler
 from project_2_utils import AdagradScheduler
 from project_2_utils import RMS_propScheduler
 
+from project_2_utils import logistic_regression
+from project_2_utils import random_forest
+
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -85,14 +88,21 @@ output_dim = 1
 input_dim = len(feature_names)
 
 lr = 0.1
-epochs = 100
-epochs_max = 100
+epochs = 500
+epochs_max = 500
 
 # Set up the list of runs here
 
-list_of_act_funcs = [utils.RELU, utils.sigmoid]
-list_of_schedulers = [AdamScheduler(0.1, 0.9, 0.999)]
-list_of_network_design = [[4,4], [4,4], [8]]
+list_of_act_funcs = [utils.RELU, 
+                     utils.sigmoid, 
+                     utils.LRELU]
+
+list_of_schedulers = [AdamScheduler(lr, 0.9, 0.999), 
+                      ConstantScheduler(lr), 
+                      MomentumScheduler(lr, 0.9), 
+                      RMS_propScheduler(lr, 0.9)]
+
+list_of_network_design = [[8,8]]
 
 list_of_runs = []
 
@@ -112,7 +122,7 @@ result_frame = pd.DataFrame(columns=["ActivationFunc",
                                      "Design",
                                      "Scheduler",
                                      "MSE"],
-                                     index=np.arange(1))
+                                     index=np.arange(0))
 
 for run in list_of_runs:
 
@@ -136,16 +146,35 @@ for run in list_of_runs:
               outcome_func_deriv=outcome_func_deriv,
               batches=5,
               scheduler=scheduler)
+    
+    # Try to train the network
 
-    loss_epochs = net.train(X_train, y_train, epochs=epochs,
-            scheduler=scheduler,
-            verbose=False)
+    try:
+
+        loss_epochs = net.train(X_train, y_train, epochs=epochs,
+                scheduler=scheduler,
+                verbose=False)
+        
+    except:
+            
+            print("Run failed")
+            continue
     
     # Now that the net is traned, test it on the evaluation
 
-    mse_run = net.evaluate(X_evaluation, y_evaluation)
+    try:
+
+        mse_run, accuracy_run = net.evaluate(X_evaluation, y_evaluation)
+    
+    except:
+             
+        print("Evaluation failed")
+        mse = np.nan
+        accuracy = np.nan
+        continue
 
     run_frame["MSE"] = mse_run
+    run_frame["Accuracy"] = accuracy_run
     run_frame["ActivationFunc"] = activation_func.__name__
     run_frame["Scheduler"] = str(scheduler.__class__.__name__)
     run_frame["Design"] = str(dims_hidden)
@@ -154,6 +183,50 @@ for run in list_of_runs:
 
 print("Printing final output")
 print("-----------------------------")
+
+# Do the logistic regression
+
+log_mse, log_accuracy = logistic_regression(X_train, 
+                          y_train.ravel(),
+                          X_evaluation,
+                          y_evaluation.ravel())
+
+run_frame = pd.DataFrame(columns=["ActivationFunc",
+                                            "Design",
+                                            "Scheduler",
+                                            "MSE",
+                                            "Accuracy"],
+                                            index = np.arange(1))
+
+run_frame["MSE"] = log_mse
+run_frame["Accuracy"] = log_accuracy
+run_frame["ActivationFunc"] = ""
+run_frame["Scheduler"] = ""
+run_frame["Design"] = "Logistic"
+
+result_frame = result_frame._append(run_frame, ignore_index = True)
+
+# Test random forest
+
+rf_mse, rf_accuracy = random_forest(X_train,
+                                    y_train.ravel(),
+                                    X_evaluation,
+                                    y_evaluation.ravel())
+
+run_frame = pd.DataFrame(columns=["ActivationFunc",
+                                            "Design",
+                                            "Scheduler",
+                                            "MSE",
+                                            "Accuracy"],
+                                            index = np.arange(1))
+
+run_frame["MSE"] = rf_mse
+run_frame["Accuracy"] = rf_accuracy
+run_frame["ActivationFunc"] = ""
+run_frame["Scheduler"] = ""
+run_frame["Design"] = "Random Forest"
+
+result_frame = result_frame._append(run_frame, ignore_index = True)
 
 print(result_frame)
 

@@ -11,6 +11,7 @@ from project_2_utils import AdamScheduler
 from sklearn.linear_model import Ridge
 import seaborn as sns    
 from sklearn.metrics import mean_squared_error
+from sklearn.metrics import accuracy_score
 
 from copy import deepcopy, copy
 from sklearn.metrics import mean_squared_error
@@ -64,7 +65,6 @@ class fnn():
             print("LOSS FUNCTION", loss_func_name, "NOT IMPLEMENTED...")
             sys.exit()
 
-
         self.batches = batches
         self.scheduler = scheduler if not scheduler == None else utils.ConstantScheduler(eta=learning_rate)
 
@@ -94,6 +94,10 @@ class fnn():
         self.learning_rate = learning_rate # TODO: make dynamic
 
     def init_random_weights_biases(self):
+        """
+        Initialize weights and biases with random values
+
+        """
         print(f"INITIALIZING RANDOM VALUES FOR LAYERS ({self.num_hidden_layers} hidden)", [self.dim_input, *self.dims_hiddens, self.dim_output])
 
         # store arrays of weights and biases for edges between all layers
@@ -117,6 +121,9 @@ class fnn():
         pass
 
     def predict_feed_forward(self, X, **kwargs):
+        """
+        Feed-forward prediction of input X through network
+        """
         print(f"PREDICTING BY FEED-FORWARDING INPUT {X.shape} THROUGH NETWORK") if kwargs.get("verbose", 0) else 0
         self.activations = [X]
         self.weighted_inputs = []
@@ -142,6 +149,10 @@ class fnn():
 
 
     def backpropagate(self, y, **kwargs):
+
+        """
+        Backpropagate error through network
+        """
         # print("activations", [np.shape(a) for a in self.activations])
         # print("weights", [np.shape(w) for w in self.weights])
         verbose = kwargs.get("verbose", False)
@@ -212,6 +223,9 @@ class fnn():
 
 
     def train(self, X, y, X_test=[], y_test=[], scheduler=None, epochs=100, **kwargs):
+        """
+        Train network on input data X with ground truth y
+        """
         if scheduler == None:
             scheduler = self.scheduler
         verbose = kwargs.get("verbose", False)
@@ -323,11 +337,15 @@ class fnn():
 
         yhat = self.predict_feed_forward(evaluation_X)
 
+        y_hat_binary = np.zeros((yhat.shape[0],1))
+        y_hat_binary[yhat > 0.5] = 1
+
         mse = mean_squared_error(evaluation_y, yhat)
+        accuracy = accuracy_score(evaluation_y, y_hat_binary)
 
         #TODO: Do accuracy instead
 
-        return mse
+        return mse, accuracy
 
 
 if __name__ == "__main__":
