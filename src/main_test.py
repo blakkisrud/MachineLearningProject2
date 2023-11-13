@@ -48,9 +48,10 @@ epochs_max = 1000   # maximum number of epochs to consider before tuning it as a
 num_batches = 4
 
 
-loss_func_name = "MSE"
-# loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
+# loss_func_name = "MSE"
+loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
 
+FIND_OPTIMAL_EPOCHS = False
 
 random_state = 42   # does nothing, yet
 
@@ -137,13 +138,14 @@ elif data_mode == 2:
 # Set up parameters for the FFN
 
 activation_func_list = [
-                        utils.sigmoid, 
-                        utils.RELU, 
-                        utils.LRELU, 
-                        utils.softmax,
+                        utils.sigmoid,
+                        utils.RELU,
+                        utils.LRELU,
+                        utils.softmax
                         ]
 
 schedule_list = [
+                # ConstantScheduler(0.1)
                 ConstantScheduler(0.1),
                 MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
@@ -188,14 +190,19 @@ for activation_func in activation_func_list:
 
             linewidth = 4.0
 
+            if FIND_OPTIMAL_EPOCHS:
+                net.init_random_weights_biases(verbose=False)
+                epochs_opt, loss_hptune_train, loss_hptune_val = net.find_optimal_epochs_kfold(X, y, k=3, epochs_max=epochs_max, plot=False, return_loss_values=True, verbose=False)
+            else:
+                epochs_opt = epochs_max
 
-            net.init_random_weights_biases()
-            epochs_opt, loss_hptune_train, loss_hptune_val = net.find_optimal_epochs_kfold(X, y, k=3, epochs_max=epochs_max, plot=False, return_loss_values=True)
+            net.init_random_weights_biases(verbose=True)
 
 
             loss_epochs = net.train(X, y, epochs=epochs_opt,
                                     scheduler=scheduler,
                                     verbose=False)
+            print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers
 
@@ -221,8 +228,11 @@ for activation_func in activation_func_list:
             if data_mode == 2:
                 # acc = accuracy_score(y, yhat)
                 auc = roc_auc_score(y, yhat)
-                print(f"mse={mse:.2e}, auc={auc:.3f}")
-                title += f"\nmse={mse:.2e}, auc={auc:.2f}"
+                y_hat_binary = np.zeros((yhat.shape[0], 1))
+                y_hat_binary[yhat > 0.5] = 1
+                acc = accuracy_score(y, y_hat_binary)
+                print(f"mse={mse:.2e}, auc={auc:.3f}, acc={acc:.3f}")
+                title += f"\nmse={mse:.2e}, auc={auc:.2f}, acc={acc:.2f}"
             else:
                 print(f"mse={mse:.2e}")
                 title += f"\nmse={mse:.2e}"
@@ -258,32 +268,32 @@ for activation_func in activation_func_list:
 
             fig.savefig(fname)
 
+            if FIND_OPTIMAL_EPOCHS:
+                # PLOTTING OPTIMAL NUMBER OF EPOCHS FOUND BY HP-TUNING
+                fig_tune, ax_tune = plt.subplots(ncols=2, figsize=(12, 8), sharey=True)
+                ax_tune, ax_tune1 = ax_tune
 
-            # PLOTTING OPTIMAL NUMBER OF EPOCHS FOUND BY HP-TUNING
-            fig_tune, ax_tune = plt.subplots(ncols=2, figsize=(12, 8), sharey=True)
-            ax_tune, ax_tune1 = ax_tune
+                epochs_tune = list(range(1, epochs_max + 1))
+                ax_tune.set_title("Training loss")
+                ax_tune1.set_title("Validation loss")
 
-            epochs_tune = list(range(1, epochs_max + 1))
-            ax_tune.set_title("Training loss")
-            ax_tune1.set_title("Validation loss")
+                for ki in range(len(loss_hptune_val)):
+                    ax_tune.plot(epochs_tune, loss_hptune_train[ki], c=f"C{ki}")
+                    ax_tune1.plot(epochs_tune, loss_hptune_val[ki], c=f"C{ki}")
+                ylims = ax_tune.get_ylim()
 
-            for ki in range(len(loss_hptune_val)):
-                ax_tune.plot(epochs_tune, loss_hptune_train[ki], c=f"C{ki}")
-                ax_tune1.plot(epochs_tune, loss_hptune_val[ki], c=f"C{ki}")
-            ylims = ax_tune.get_ylim()
+                ax_tune.vlines(x=epochs_opt, ymin=ylims[0], ymax=ylims[1], linestyles=":", colors="black", label="optimal epoch")
+                ax_tune1.vlines(x=epochs_opt, ymin=ylims[0], ymax=ylims[1], linestyles=":", colors="black", label="optimal epoch")
 
-            ax_tune.vlines(x=epochs_opt, ymin=ylims[0], ymax=ylims[1], linestyles=":", colors="black", label="optimal epoch")
-            ax_tune1.vlines(x=epochs_opt, ymin=ylims[0], ymax=ylims[1], linestyles=":", colors="black", label="optimal epoch")
+                ax_tune.set_ylabel(f"{loss_func_name}")
+                ax_tune.set_xlabel("epoch")
+                ax_tune1.set_xlabel("epoch")
+                ax_tune.legend()
+                ax_tune1.legend()
 
-            ax_tune.set_ylabel(f"{loss_func_name}")
-            ax_tune.set_xlabel("epoch")
-            ax_tune1.set_xlabel("epoch")
-            ax_tune.legend()
-            ax_tune1.legend()
+                fig_tune.suptitle(title)
 
-            fig_tune.suptitle(title)
-
-            fig_tune.savefig(fname_hptune)
+                fig_tune.savefig(fname_hptune)
 
 
         except Exception as e:

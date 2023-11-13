@@ -94,12 +94,13 @@ class fnn():
 
         self.is_trained = False
 
-    def init_random_weights_biases(self):
+    def init_random_weights_biases(self, **kwargs):
         """
         Initialize weights and biases with random values
 
         """
-        print(f"INITIALIZING RANDOM VALUES FOR LAYERS ({self.num_hidden_layers} hidden)", [self.dim_input, *self.dims_hiddens, self.dim_output])
+        verbose = kwargs.get("verbose", False)
+        print(f"INITIALIZING RANDOM VALUES FOR LAYERS ({self.num_hidden_layers} hidden)", [self.dim_input, *self.dims_hiddens, self.dim_output]) if verbose else 0
 
         # store arrays of weights and biases for edges between all layers
         weights = []
@@ -133,18 +134,15 @@ class fnn():
         Al = X
         for Wl, bl in zip(self.weights, self.biases):
             Zl = Al @ Wl + bl
-            # todo: linear activation function for final layer? (i.e. the identity function)
             i += 1
 
             if i > self.num_hidden_layers:  # FINAL LAYER
                 Al = self.outcome_func(Zl)
-
             else:                           # HIDDEN LAYERS
                 Al = self.activation_func(Zl)
 
             self.activations.append(Al)
             self.weighted_inputs.append(Zl)
-
         self.A = Al
         return Al
 
@@ -237,8 +235,8 @@ class fnn():
 
         batch_size = X.shape[0] // self.batches
 
-        print("TRAINING NETWORK using the scheduler\t", scheduler)
-        print(f"\twith {self.batches} batches of size {batch_size}")
+        print("TRAINING NETWORK using the scheduler\t", scheduler) if verbose else 0
+        print(f"\twith {self.batches} batches of size {batch_size}") if verbose else 0
 
         for n in range(len(self.weights)):
             self.schedulers_weights.append(copy(scheduler))
@@ -299,7 +297,7 @@ class fnn():
 
         return_loss_values = kwargs.get("return_loss_values", False)
         plot = kwargs.get("plot", True)
-
+        verbose = kwargs.get("verbose", False)
         print(f"FINDING optimal number of epochs using {k}-fold validation")
 
         # Training / validation average loss over epochs for each fold k
@@ -309,7 +307,6 @@ class fnn():
         for ind_train, ind_val in KFold(n_splits=k, shuffle=True, random_state=self.random_state).split(X, y):
             x_train, y_train = X[ind_train], y[ind_train]
             x_val, y_val = X[ind_val], y[ind_val]
-            print(x_train.shape, x_val.shape)
 
             self.init_random_weights_biases()   # reset weights and biases
 
@@ -319,7 +316,7 @@ class fnn():
             loss_validation.append(loss_val_k)
 
         epochs_opt = np.argmin(np.mean(loss_validation, axis=0)) + 1
-        print("optimal number of epochs = ", epochs_opt)
+        print("\toptimal number of epochs = ", epochs_opt)
 
         if plot:
             epochs = list(range(1, epochs_max + 1))
