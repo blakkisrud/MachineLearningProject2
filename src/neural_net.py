@@ -85,13 +85,14 @@ class fnn():
         self.layer_sizes = [dim_input] + self.dims_hiddens + [dim_output]
         self.num_layers = len(self.layer_sizes)
 
-
         self.weights = [np.random.randn(self.layer_sizes[i], self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
         self.biases = [np.random.randn(self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
 
         self.init_random_weights_biases()
 
         self.learning_rate = learning_rate # TODO: make dynamic
+
+        self.is_trained = False
 
     def init_random_weights_biases(self):
         """
@@ -285,6 +286,8 @@ class fnn():
 
             if any(y_test):
                 loss_for_epochs_test.append(np.mean(loss_for_batches_test))
+
+        self.is_trained = True
 
         if not any(y_test):
             return loss_for_epochs
