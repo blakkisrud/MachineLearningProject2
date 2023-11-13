@@ -23,37 +23,25 @@ LOSS FUNCTIONS'
 - CROSS-ENTROPY
 """
 
-def mse_loss(yhat, y):
-    return np.square(yhat - y)
-
-
-
+def mse_loss(yhat, y, lmbd=0.0, w=0):
+    if lmbd == 0.0:
+        return np.square(yhat - y)
+    else:
+        l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
+        return np.square(yhat - y) + l2_regularization
+    
 def mse_loss_deriv(yhat, y):
     return 2 * (yhat - y)
 
-
-def cross_entropy_loss(yhat, y):
-    return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
-
-
+def cross_entropy_loss(yhat, y, lmbd=0.0, w=0):
+    if lmbd == 0.0:
+        return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
+    else:
+        l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
+        return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat)) + l2_regularization
+    
 def cross_entropy_loss_deriv(yhat, y):
     return (yhat - y) / (yhat * (1 - yhat))
-
-def cross_entropy_loss_L2(yhat, y, lmbd, w):
-    # Cross entropy loss function with L2 regularization
-    cost = - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
-    l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
-    cost = cost + l2_regularization
-    return cost
-
-
-def MSE_L2(yhat, y, lmbd, w):
-    # MSE cost function with L2 regularization
-    N = len(y)
-    cost = 1/(2*N)*np.sum(np.square(yhat - y))
-    l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
-    cost = cost + l2_regularization
-    return cost
 
 """
 
@@ -377,8 +365,6 @@ def general_stochastic_gradient_descent(X, y, beta, scheduler,
     else:
 
         return beta
-
-
 
 
 

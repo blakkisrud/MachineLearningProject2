@@ -180,6 +180,7 @@ for activation_func in activation_func_list:
                       activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=num_batches,
+                      lmbd = 0.1,
                       scheduler=scheduler, random_state=random_state)
 
             nrand = 1
@@ -202,7 +203,7 @@ for activation_func in activation_func_list:
             loss_epochs = net.train(X, y, epochs=epochs_opt,
                                     scheduler=scheduler,
                                     verbose=False)
-            print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
+            #print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers
 

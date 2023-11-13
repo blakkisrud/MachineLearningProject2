@@ -48,17 +48,11 @@ class fnn():
 
         # INITIALIZING LOSS FUNCTION
         if loss_func_name.upper() == "MSE":
-            if self.lmbd == 0.0:
-                self.loss_func = utils.mse_loss
-            else:
-                self.loss_func = utils.MSE_L2
+            self.loss_func = utils.mse_loss
             self.loss_func_deriv = utils.mse_loss_deriv
 
         elif loss_func_name.upper() == "CROSS-ENTROPY":
-            if self.lmbd == 0.0:
-                self.loss_func = utils.cross_entropy_loss
-            else:
-                self.loss_func = utils.cross_entropy_loss_L2
+            self.loss_func = utils.cross_entropy_loss
             self.loss_func_deriv = utils.cross_entropy_loss_deriv
 
         else:
@@ -97,8 +91,8 @@ class fnn():
     def init_random_weights_biases(self, **kwargs):
         """
         Initialize weights and biases with random values
-
         """
+
         verbose = kwargs.get("verbose", False)
         print(f"INITIALIZING RANDOM VALUES FOR LAYERS ({self.num_hidden_layers} hidden)", [self.dim_input, *self.dims_hiddens, self.dim_output]) if verbose else 0
 
@@ -146,7 +140,6 @@ class fnn():
         self.A = Al
         return Al
 
-
     def backpropagate(self, y, **kwargs):
 
         """
@@ -160,11 +153,8 @@ class fnn():
 
         # loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
         # dC = 2 * (self.activations[-1] - y)     # derivative of squared error
-        if self.lmbd == 0.0:
-            loss = self.loss_func(self.activations[-1], y)
-        else:
-            loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights)
 
+        loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights)
         dC = self.loss_func_deriv(self.activations[-1], y)
 
         # print(loss.shape, np.mean(loss))
@@ -194,14 +184,11 @@ class fnn():
                 # print("HIDDEN LAYER")
                 f_deriv_zl = self.activation_func_deriv(self.weighted_inputs[l])
 
-            if self.lmbd == 0.0:
-                delta_l = dC * f_deriv_zl 
-            else: 
-                delta_l = dC * f_deriv_zl# + self.lmbd * np.sum(self.weights)
 
+            delta_l = dC * f_deriv_zl
 
             # cost rate of change with respect to weights and biases in layer l
-            dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*sum(np.sum(w) for w in self.weights)
+            dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*self.weights[l]
             db = np.sum(delta_l, axis=0)
 
             # Would dW and db be the gradiants?
@@ -220,7 +207,6 @@ class fnn():
             dC = np.dot(delta_l, self.weights[l].T)
 
         return loss
-
 
     def train(self, X, y, X_test=[], y_test=[], scheduler=None, epochs=100, **kwargs):
         """
@@ -269,7 +255,7 @@ class fnn():
 
                 if any(y_test):
                     self.predict_feed_forward(X_test)
-                    loss_test = self.loss_func(self.activations[-1], y_test)
+                    loss_test = self.loss_func(self.activations[-1], y_test, lmbd, self.weights)
                     loss_for_batches_test.append(loss_test)
 
 
