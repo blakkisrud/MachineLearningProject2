@@ -33,23 +33,23 @@ from neural_net import fnn
 # MAIN HYPERVARIABLES
 # FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
 
-data_mode = 2           # What data to analyse (comment out before running from terminal)
+data_mode = 1           # What data to analyse (comment out before running from terminal)
 data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, Franke, terrain ?
 
 
 # NETWORK PARAMETERS
 
-# dims_hidden = [8, 8, 8]
+# dims_hidden = [4, 8, 3]
 # dims_hidden = [1]
 dims_hidden = [4]
 lr = 0.1
-epochs_max = 1000   # maximum number of epochs to consider before tuning it as a HP
+epochs_max = 5000   # maximum number of epochs to consider before tuning it as a HP
 # num_batches = 32
 num_batches = 4
 
 
-# loss_func_name = "MSE"
-loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
+loss_func_name = "MSE"
+# loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
 
 FIND_OPTIMAL_EPOCHS = False
 
@@ -127,10 +127,10 @@ elif data_mode == 2:
     input_dim = X.shape[1]
 
     # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
-    # outcome_func = utils.softmax
-    # outcome_func_deriv = utils.derivate(utils.softmax)
-    outcome_func = utils.sigmoid
-    outcome_func_deriv = utils.derivate(utils.sigmoid)
+    outcome_func = utils.softmax
+    outcome_func_deriv = utils.derivate(utils.softmax)
+    # outcome_func = utils.sigmoid
+    # outcome_func_deriv = utils.derivate(utils.sigmoid)
 
 
 # TODO: resevere test set NOT for training
@@ -139,15 +139,15 @@ elif data_mode == 2:
 
 activation_func_list = [
                         utils.sigmoid,
-                        utils.RELU,
-                        utils.LRELU,
-                        utils.softmax
+                        # utils.RELU,
+                        # utils.LRELU,
+                        # utils.softmax
                         ]
 
 schedule_list = [
-                # ConstantScheduler(0.1)
-                ConstantScheduler(0.1),
-                MomentumScheduler(0.1, 0.9),
+                ConstantScheduler(0.1)
+                # ConstantScheduler(0.1),
+                # MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
                 # RMS_propScheduler(0.1, 0.9),
                 # AdamScheduler(0.1, 0.9, 0.999),
@@ -157,6 +157,7 @@ print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t
 print([act.__name__ for act in activation_func_list])
 print("WITH SCHEDULERS", end="\t")
 print([type(sch) for sch in schedule_list])
+print("FOR OUTCOME ACTIVATION", outcome_func.__name__, ", LOSS FUNCTION", loss_func_name)
 
 error_log = ""
 
@@ -180,7 +181,7 @@ for activation_func in activation_func_list:
                       activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=num_batches,
-                      lmbd = 0.1,
+                      lmbd = 0,
                       scheduler=scheduler, random_state=random_state)
 
             nrand = 1
@@ -201,9 +202,9 @@ for activation_func in activation_func_list:
 
 
             loss_epochs = net.train(X, y, epochs=epochs_opt,
-                                    scheduler=scheduler,
-                                    verbose=False)
-            #print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
+                                    scheduler=scheduler, dropout_retain_proba=0.75,
+                                    verbose=True)
+            print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers
 
