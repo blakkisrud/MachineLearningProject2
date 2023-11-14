@@ -34,7 +34,7 @@ from neural_net import fnn
 # MAIN HYPERVARIABLES
 # FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
 
-data_mode = 2           # What data to analyse (comment out before running from terminal)
+data_mode = 1           # What data to analyse (comment out before running from terminal)
 data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, Franke, terrain ?
 
 
@@ -44,7 +44,11 @@ data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, 
 # dims_hidden = [1]
 dims_hidden = [4]
 lr = 0.1
+<<<<<<< HEAD
 epochs_max = 10   # maximum number of epochs to consider before tuning it as a HP
+=======
+epochs_max = 5000   # maximum number of epochs to consider before tuning it as a HP
+>>>>>>> origin/main
 # num_batches = 32
 num_batches = 4
 
@@ -137,14 +141,23 @@ elif data_mode == 2:
 # Set up parameters for the FFN
 
 activation_func_list = [
+<<<<<<< HEAD
                         # utils.sigmoid,
                         utils.RELU,
+=======
+                        utils.sigmoid,
+                        # utils.RELU,
+>>>>>>> origin/main
                         # utils.LRELU,
                         # utils.softmax
                         ]
 
 schedule_list = [
+<<<<<<< HEAD
                 ConstantScheduler(0.1),
+=======
+                ConstantScheduler(0.1)
+>>>>>>> origin/main
                 # ConstantScheduler(0.1),
                 # MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
@@ -203,7 +216,11 @@ for activation_func in activation_func_list:
 
             loss_epochs = net.train(X, y, epochs=epochs_opt,
                                     scheduler=scheduler, dropout_retain_proba=0.75,
+<<<<<<< HEAD
                                     verbose=False)
+=======
+                                    verbose=True)
+>>>>>>> origin/main
             print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers

@@ -79,8 +79,8 @@ class fnn():
         self.layer_sizes = [dim_input] + self.dims_hiddens + [dim_output]
         self.num_layers = len(self.layer_sizes)
 
-        self.weights = [np.random.randn(self.layer_sizes[i], self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
-        self.biases = [np.random.randn(self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
+        # self.weights = [np.random.randn(self.layer_sizes[i], self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
+        # self.biases = [np.random.randn(self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
 
         self.init_random_weights_biases()
 
@@ -168,7 +168,7 @@ class fnn():
             print("biases\t", [np.shape(b) for b in self.biases])
             print("activations\t\t", [np.shape(a) for a in self.activations])
             print("weighted inputs\t", [np.shape(z) for z in self.weighted_inputs])
-
+            pass
 
         for l in range(self.num_layers - 2, -1, -1):
             print("l=", l) if verbose else 0
@@ -191,6 +191,7 @@ class fnn():
             dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*self.weights[l]
             db = np.sum(delta_l, axis=0)
 
+
             # Would dW and db be the gradiants?
 
             # print("dW, db", dW.shape, db.shape)
@@ -200,6 +201,10 @@ class fnn():
 
             change_weights = (self.schedulers_weights[l].update_change(dW))/num_obs
             change_biases = (self.schedulers_biases[l].update_change(db))/num_obs
+
+            if self.dropout_state:
+                change_weights *= self.dropout_retain_proba
+                change_biases *= self.dropout_retain_proba
 
             self.weights[l] -= change_weights
             self.biases[l] -= change_biases
@@ -214,7 +219,13 @@ class fnn():
         """
         if scheduler == None:
             scheduler = self.scheduler
+
+        self.dropout_retain_proba = kwargs.get("dropout_retain_proba", 1.0)  # fraction of neurons to dropout for each epoch of training
+
+
         verbose = kwargs.get("verbose", False)
+        kwargs["verbose"] = False
+
 
         loss_for_epochs = []
         loss_for_epochs_test = []   # only returns if y_val is not None
@@ -232,7 +243,6 @@ class fnn():
 
         for e in range(epochs):
 
-            print(f"epoch {e}", end="\r") 
             loss_for_batches = []
             loss_for_batches_test = []
             for n in range(self.batches):
@@ -247,11 +257,19 @@ class fnn():
                     X_batch = X[n*batch_size:(n+1)*batch_size,:]
                     y_batch = y[n*batch_size:(n+1)*batch_size]
 
+                if self.dropout_retain_proba < 1.0:
+                    self.dropout_layers()
+                else:
+                    self.dropout_state = False
+
                 self.predict_feed_forward(X_batch)
                 loss = self.backpropagate(y_batch, **kwargs)
                 loss_for_batches.append(np.mean(loss))
                 # print(loss.shape, loss_for_batches)
                 # sys.exit()
+
+                if self.dropout_state:
+                    self.dropout_reset()
 
                 if any(y_test):
                     self.predict_feed_forward(X_test)
@@ -264,7 +282,10 @@ class fnn():
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
 
-            print(e, loss.shape, f"{np.mean(loss):.3e}, {np.median(loss):.3e}") if verbose else 0
+            if verbose:
+                print("epoch", e, loss.shape, f"loss mean / median = {np.mean(loss):.1e} / {np.median(loss):.1e}")
+                print("\tnonzero weights:", [f"{len(np.nonzero(w))} of {len(w)}" for w in self.weights])
+
             # loss_for_epochs.append(np.mean(loss))
             loss_for_epochs.append(np.mean(loss_for_batches))
 
@@ -333,6 +354,80 @@ class fnn():
         #TODO: Do accuracy instead
 
         return mse, accuracy
+
+    def dropout_layers(self):
+        '''
+        Retains self.dropout_retain_proba fraction of neurons in each layer, rest is dropped out temporarily.
+        '''
+
+        self.neurons_to_retain = [np.random.choice(range(dh), int(dh * self.dropout_retain_proba), replace=False) for dh in
+                             self.dims_hiddens]
+
+        self.weights_before_dropout = copy(self.weights)
+        self.biases_before_dropout = copy(self.biases)
+
+        # print(self.neurons_to_retain)
+        # print([np.shape(w) for w in self.weights])
+        # print([np.shape(b) for b in self.biases])
+
+        self.weights = []
+        self.biases = []
+
+        for l in range(len(self.dims_hiddens) + 1):
+
+            if not l == len(self.dims_hiddens):
+                ns_rt = self.neurons_to_retain[l]
+                self.weights.append(self.weights_before_dropout[l][:, ns_rt])
+                self.biases.append(self.biases_before_dropout[l][ns_rt])
+
+                if not l == 0:
+                    self.weights[l] = self.weights[l][ns_rt_prev, :]
+
+            else:
+                self.weights.append(self.weights_before_dropout[l][ns_rt_prev, :])
+                self.biases.append(self.biases_before_dropout[-1])
+
+            ns_rt_prev = ns_rt
+
+        # print([np.shape(w) for w in self.weights])
+        # print([np.shape(b) for b in self.biases])
+        self.dropout_state = True
+
+        pass
+
+
+    def dropout_reset(self):
+        '''
+        Sets the weights tuned after dropping out some neurons,
+        while resetting dropout neurons to weight and bias values from before dropout was initialized
+        Normalization to dropout probability is done in the backpropagation algorithm, when self.dropout_state is True
+        '''
+        # self.weights_dropout = [w * self.dropout_retain_proba for w in self.weights]
+        # self.biases_dropout = [b * self.dropout_retain_proba for b in self.biases]
+        self.weights_dropout = self.weights
+        self.biases_dropout = self.biases
+
+
+        self.weights = self.weights_before_dropout
+        self.biases = self.biases_before_dropout
+
+        for l in range(len(self.dims_hiddens) + 1):
+
+            if not l == len(self.dims_hiddens):
+                ns_rt = self.neurons_to_retain[l]
+                self.biases[l][ns_rt] = self.biases_dropout[l]
+                if l == 0:
+                    self.weights[l][:, ns_rt] = self.weights_dropout[l]
+                else:
+                    self.weights[l][ns_rt_prev[:, None], ns_rt[None, :]] = self.weights_dropout[l]
+            else:   # final layer
+                self.biases[-1] = self.biases_dropout[-1]
+                self.weights[l][ns_rt_prev, :] = self.weights_dropout[l]
+
+            ns_rt_prev = ns_rt
+
+        self.dropout_state = False
+        pass
 
 
 if __name__ == "__main__":

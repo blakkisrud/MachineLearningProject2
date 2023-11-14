@@ -173,7 +173,7 @@ def sigmoid(X):
 
 
 def softmax(X):
-    X = X - np.max(X, axis=-1, keepdims=True)
+    # X = X - np.max(X, axis=-1, keepdims=True)
     delta = 10e-10
     return np.exp(X) / (np.sum(np.exp(X), axis=-1, keepdims=True) + delta)
 
