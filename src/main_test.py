@@ -20,6 +20,7 @@ import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
 
 import project_2_utils as utils
 from project_2_utils import ConstantScheduler
@@ -34,7 +35,7 @@ from neural_net import fnn
 # MAIN HYPERVARIABLES
 # FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
 
-data_mode = 1           # What data to analyse (comment out before running from terminal)
+data_mode = 2           # What data to analyse (comment out before running from terminal)
 data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, Franke, terrain ?
 
 
@@ -44,11 +45,7 @@ data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, 
 # dims_hidden = [1]
 dims_hidden = [4]
 lr = 0.1
-<<<<<<< HEAD
-epochs_max = 10   # maximum number of epochs to consider before tuning it as a HP
-=======
-epochs_max = 5000   # maximum number of epochs to consider before tuning it as a HP
->>>>>>> origin/main
+epochs_max = 1000   # maximum number of epochs to consider before tuning it as a HP
 # num_batches = 32
 num_batches = 4
 
@@ -126,6 +123,20 @@ elif data_mode == 2:
     X = StandardScaler().fit_transform(X)
     y = y.values.reshape(-1, 1)
 
+    idx = np.arange(len(y))
+
+    assert len(idx) == X.shape[0]
+
+    idx_train, idx_evaluation = train_test_split(idx, train_size=0.7, 
+                                             random_state=random_state)
+
+    X_train = X[idx_train,:]
+    X_evaluation = X[idx_evaluation,:]
+
+    y_train = y[idx_train]
+    y_evaluation = y[idx_evaluation]
+
+
     output_dim = 1
     input_dim = X.shape[1]
 
@@ -141,23 +152,14 @@ elif data_mode == 2:
 # Set up parameters for the FFN
 
 activation_func_list = [
-<<<<<<< HEAD
                         # utils.sigmoid,
                         utils.RELU,
-=======
-                        utils.sigmoid,
-                        # utils.RELU,
->>>>>>> origin/main
                         # utils.LRELU,
                         # utils.softmax
                         ]
 
 schedule_list = [
-<<<<<<< HEAD
                 ConstantScheduler(0.1),
-=======
-                ConstantScheduler(0.1)
->>>>>>> origin/main
                 # ConstantScheduler(0.1),
                 # MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
@@ -176,6 +178,7 @@ error_log = ""
 
 max_loss = 0
 
+"""
 for activation_func in activation_func_list:
 
     for scheduler in schedule_list:
@@ -214,13 +217,9 @@ for activation_func in activation_func_list:
             net.init_random_weights_biases(verbose=False)
 
 
-            loss_epochs = net.train(X, y, epochs=epochs_opt,
+            loss_epochs = net.train(X_train, y_train, epochs=epochs_opt,
                                     scheduler=scheduler, dropout_retain_proba=0.75,
-<<<<<<< HEAD
                                     verbose=False)
-=======
-                                    verbose=True)
->>>>>>> origin/main
             print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers
@@ -323,12 +322,12 @@ for activation_func in activation_func_list:
             error_log += f"Exception: {e}\n" + f"Activation function: {activation_func.__name__}\n" + f"Scheduler: {scheduler.__class__.__name__}\n"
 
             continue
-
+"""
 
 def grid_search():
     # TODO: Change to test set, or include both, test & training accuracy
-    n = 7       # Tests for learning rate and hyperparameter
-    start = -5  # In log_10 scale for learning rate & lmbd
+    n = 10       # Tests for learning rate and hyperparameter
+    start = -8  # In log_10 scale for learning rate & lmbd
     end = 1         
     eta_vals = np.logspace(start, end, n)
     lmbd_vals = np.logspace(start, end, n)
@@ -358,30 +357,30 @@ def grid_search():
                       scheduler=scheduler, random_state=random_state)
 
             # Change to test set
-            loss_epochs = net.train(X, y, epochs=epochs_max,
-                                    scheduler=scheduler, dropout_retain_proba=0.75,
+            loss_epochs = net.train(X_train, y_train, epochs=epochs_max,
+                                    scheduler=scheduler, dropout_retain_proba=1,
                                     verbose=False)
             
-            yhat = net.predict_feed_forward(X)             # Also change to test set
+            yhat = net.predict_feed_forward(X_evaluation)             # Also change to test set
             if data_mode == 2:
                 y_hat_binary = np.zeros((yhat.shape[0], 1))
                 y_hat_binary[yhat > 0.5] = 1
-                acc = accuracy_score(y, y_hat_binary)
+                acc = accuracy_score(y_evaluation, y_hat_binary)
                 accuracy_matrix[i][j] = acc
             else:
                 MSE = np.sum(utils.mse_loss(yhat, y))       # Change to testing set
                 accuracy_matrix[i][j] = MSE
 
     fig, ax = plt.subplots(figsize = (10, 10))
-    sns.heatmap(accuracy_matrix, annot=True, ax=ax, cmap="viridis")
-    ax.set_title("Training Accuracy")
+    sns.heatmap(accuracy_matrix, annot=True, ax=ax, cmap="viridis", fmt=".3f")
+    ax.set_title("Test Accuracy")
     ax.set_ylabel("$log_{10}(\eta)$")
     ax.set_xticks(np.linspace(1,n,n)-0.5, np.linspace(start, end, n))
     ax.set_yticks(np.linspace(1,n,n)-0.5, np.linspace(start, end, n))
     ax.set_xlabel("$log_{10}(\lambda)$")
     plt.show()
 
-#grid_search()
+grid_search()
 
 if error_log != "":
     print(error_log)
