@@ -126,8 +126,8 @@ elif data_mode == 2:
     input_dim = X.shape[1]
 
     # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
-    outcome_func = utils.sigmoid
-    outcome_func_deriv = utils.derivate(utils.sigmoid)
+    outcome_func = utils.softmax
+    outcome_func_deriv = utils.derivate(utils.softmax)
     # outcome_func = utils.sigmoid
     # outcome_func_deriv = utils.derivate(utils.sigmoid)
 
@@ -146,10 +146,10 @@ activation_func_list = [
 schedule_list = [
                 ConstantScheduler(0.1),
                 # ConstantScheduler(0.1),
-                MomentumScheduler(0.1, 0.9),
+                # MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
                 # RMS_propScheduler(0.1, 0.9),
-                AdamScheduler(0.1, 0.9, 0.999),
+                # AdamScheduler(0.1, 0.9, 0.999),
                 ]
 
 print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")
