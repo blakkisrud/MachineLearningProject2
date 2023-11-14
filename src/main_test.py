@@ -11,6 +11,7 @@ Doing simple logging to the console for now
 import autograd.numpy as np
 from autograd import grad
 import matplotlib.pyplot as plt
+import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import sys
@@ -39,17 +40,17 @@ data_mode_names = {1:"simple_1d_function", 2:"wisconsin_classif"}  # add MNIST, 
 
 # NETWORK PARAMETERS
 
-# dims_hidden = [8, 8, 8]
+# dims_hidden = [4, 8, 3]
 # dims_hidden = [1]
 dims_hidden = [4]
 lr = 0.1
-epochs_max = 1000   # maximum number of epochs to consider before tuning it as a HP
+epochs_max = 10   # maximum number of epochs to consider before tuning it as a HP
 # num_batches = 32
 num_batches = 4
 
 
-# loss_func_name = "MSE"
-loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
+loss_func_name = "MSE"
+# loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
 
 FIND_OPTIMAL_EPOCHS = False
 
@@ -58,10 +59,8 @@ random_state = 42   # does nothing, yet
 
 plot_dir = "figs/"      # Where to plot
 
-
 # Make a directory for the test-suite
 plot_folder = os.path.join(plot_dir, f"{data_mode_names[data_mode]}")
-
 
 if not os.path.exists(plot_folder):
     os.makedirs(plot_folder)
@@ -127,10 +126,10 @@ elif data_mode == 2:
     input_dim = X.shape[1]
 
     # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
-    # outcome_func = utils.softmax
-    # outcome_func_deriv = utils.derivate(utils.softmax)
     outcome_func = utils.sigmoid
     outcome_func_deriv = utils.derivate(utils.sigmoid)
+    # outcome_func = utils.sigmoid
+    # outcome_func_deriv = utils.derivate(utils.sigmoid)
 
 
 # TODO: resevere test set NOT for training
@@ -138,30 +137,32 @@ elif data_mode == 2:
 # Set up parameters for the FFN
 
 activation_func_list = [
-                        utils.sigmoid,
+                        # utils.sigmoid,
                         utils.RELU,
-                        utils.LRELU,
-                        utils.softmax
+                        # utils.LRELU,
+                        # utils.softmax
                         ]
 
 schedule_list = [
-                # ConstantScheduler(0.1)
                 ConstantScheduler(0.1),
+                # ConstantScheduler(0.1),
                 MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
                 # RMS_propScheduler(0.1, 0.9),
-                # AdamScheduler(0.1, 0.9, 0.999),
+                AdamScheduler(0.1, 0.9, 0.999),
                 ]
 
 print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")
 print([act.__name__ for act in activation_func_list])
 print("WITH SCHEDULERS", end="\t")
 print([type(sch) for sch in schedule_list])
+print("FOR OUTCOME ACTIVATION", outcome_func.__name__, ", LOSS FUNCTION", loss_func_name)
 
 error_log = ""
 
 
 max_loss = 0
+
 for activation_func in activation_func_list:
 
     for scheduler in schedule_list:
@@ -180,7 +181,7 @@ for activation_func in activation_func_list:
                       activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=num_batches,
-                      lmbd = 0.1,
+                      lmbd = 0,
                       scheduler=scheduler, random_state=random_state)
 
             nrand = 1
@@ -197,13 +198,13 @@ for activation_func in activation_func_list:
             else:
                 epochs_opt = epochs_max
 
-            net.init_random_weights_biases(verbose=True)
+            net.init_random_weights_biases(verbose=False)
 
 
             loss_epochs = net.train(X, y, epochs=epochs_opt,
-                                    scheduler=scheduler,
+                                    scheduler=scheduler, dropout_retain_proba=0.75,
                                     verbose=False)
-            #print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
+            print("WEIGHTS post-training:", [np.round(w.reshape(-1), 1) for w in net.weights])
 
             i = 1 # Because random-init still lingers
 
@@ -306,13 +307,71 @@ for activation_func in activation_func_list:
 
             continue
 
+
+def grid_search():
+    # TODO: Change to test set, or include both, test & training accuracy
+    n = 7       # Tests for learning rate and hyperparameter
+    start = -5  # In log_10 scale for learning rate & lmbd
+    end = 1         
+    eta_vals = np.logspace(start, end, n)
+    lmbd_vals = np.logspace(start, end, n)
+    iterations = len(eta_vals) * len(lmbd_vals)
+    iter = 0
+    accuracy_matrix = np.zeros((len(eta_vals), len(lmbd_vals)))
+
+    # Functions and scheduler aren't significant for finding optimal eta & lmbd values, they are investigated in a later stage
+    outcome_func = utils.sigmoid
+    outcome_func_deriv = utils.derivate(utils.sigmoid)
+    activation_func = utils.RELU
+    activation_func_deriv = utils.derivate(utils.RELU)
+
+    for i, eta in enumerate(eta_vals):
+
+        scheduler = AdamScheduler(eta, 0.9, 0.999)
+
+        for j, lmbd in enumerate(lmbd_vals):
+            iter += 1
+            print(f'Breaking News: Now on iteration {iter}/{iterations}!')
+
+            net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=eta, loss_func_name=loss_func_name,
+                      activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
+                      outcome_func_deriv=outcome_func_deriv,
+                      batches=num_batches,
+                      lmbd = lmbd,
+                      scheduler=scheduler, random_state=random_state)
+
+            # Change to test set
+            loss_epochs = net.train(X, y, epochs=epochs_max,
+                                    scheduler=scheduler, dropout_retain_proba=0.75,
+                                    verbose=False)
+            
+            yhat = net.predict_feed_forward(X)             # Also change to test set
+            if data_mode == 2:
+                y_hat_binary = np.zeros((yhat.shape[0], 1))
+                y_hat_binary[yhat > 0.5] = 1
+                acc = accuracy_score(y, y_hat_binary)
+                accuracy_matrix[i][j] = acc
+            else:
+                MSE = np.sum(utils.mse_loss(yhat, y))       # Change to testing set
+                accuracy_matrix[i][j] = MSE
+
+    fig, ax = plt.subplots(figsize = (10, 10))
+    sns.heatmap(accuracy_matrix, annot=True, ax=ax, cmap="viridis")
+    ax.set_title("Training Accuracy")
+    ax.set_ylabel("$log_{10}(\eta)$")
+    ax.set_xticks(np.linspace(1,n,n)-0.5, np.linspace(start, end, n))
+    ax.set_yticks(np.linspace(1,n,n)-0.5, np.linspace(start, end, n))
+    ax.set_xlabel("$log_{10}(\lambda)$")
+    plt.show()
+
+#grid_search()
+
 if error_log != "":
     print(error_log)
 else:
     print("No errors found")
 
 print("Have a nice day!")
-
 sys.exit()
 
 # Set up design matrix
