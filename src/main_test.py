@@ -48,7 +48,7 @@ lr = 0.1
 epochs_max = 1000   # maximum number of epochs to consider before tuning it as a HP
 # num_batches = 32
 num_batches = 4
-
+dropout_retain_proba = 1.0
 
 loss_func_name = "MSE"
 # loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
@@ -123,18 +123,7 @@ elif data_mode == 2:
     X = StandardScaler().fit_transform(X)
     y = y.values.reshape(-1, 1)
 
-    idx = np.arange(len(y))
 
-    assert len(idx) == X.shape[0]
-
-    idx_train, idx_evaluation = train_test_split(idx, train_size=0.7, 
-                                             random_state=random_state)
-
-    X_train = X[idx_train,:]
-    X_evaluation = X[idx_evaluation,:]
-
-    y_train = y[idx_train]
-    y_evaluation = y[idx_evaluation]
 
 
     output_dim = 1
@@ -147,19 +136,32 @@ elif data_mode == 2:
     # outcome_func_deriv = utils.derivate(utils.sigmoid)
 
 
+
 # TODO: resevere test set NOT for training
+idx = np.arange(len(y))
+
+assert len(idx) == X.shape[0]
+
+idx_train, idx_evaluation = train_test_split(idx, train_size=0.7,
+                                         random_state=random_state)
+
+X_train = X[idx_train,:]
+X_evaluation = X[idx_evaluation,:]
+
+y_train = y[idx_train]
+y_evaluation = y[idx_evaluation]
 
 # Set up parameters for the FFN
 
 activation_func_list = [
-                        # utils.sigmoid,
+                        utils.sigmoid,
                         utils.RELU,
-                        # utils.LRELU,
+                        utils.LRELU,
                         # utils.softmax
                         ]
 
 schedule_list = [
-                ConstantScheduler(0.1),
+                ConstantScheduler(lr)
                 # ConstantScheduler(0.1),
                 # MomentumScheduler(0.1, 0.9),
                 # AdagradScheduler(0.1),
@@ -177,8 +179,7 @@ error_log = ""
 
 
 max_loss = 0
-
-"""
+'''
 for activation_func in activation_func_list:
 
     for scheduler in schedule_list:
@@ -214,7 +215,7 @@ for activation_func in activation_func_list:
             else:
                 epochs_opt = epochs_max
 
-            net.init_random_weights_biases(verbose=False)
+            net.init_random_weights_biases(verbose=True)
 
 
             loss_epochs = net.train(X_train, y_train, epochs=epochs_opt,
@@ -240,7 +241,7 @@ for activation_func in activation_func_list:
             # TODO: ADD TEST SET PREDICTIONS / LOSS
             fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
             ax, ax1 = ax
-            ax1.set_ylim(0, 1)
+            # ax1.set_ylim(0, 1)
 
 
             if data_mode == 2:
@@ -263,7 +264,7 @@ for activation_func in activation_func_list:
             ax.set_title(f"{loss_func_name} during training")
             ax.set_xlabel("Epochs")
             ax.set_ylabel("Loss")
-            ax.set_ylim(0, max_loss * 1.1)
+            # ax.set_ylim(0, max_loss * 1.1)
             ax.legend()
 
             if data_mode == 1:
@@ -322,13 +323,13 @@ for activation_func in activation_func_list:
             error_log += f"Exception: {e}\n" + f"Activation function: {activation_func.__name__}\n" + f"Scheduler: {scheduler.__class__.__name__}\n"
 
             continue
-"""
+'''
 
 def grid_search():
     # TODO: Change to test set, or include both, test & training accuracy
     n = 10       # Tests for learning rate and hyperparameter
     start = -8  # In log_10 scale for learning rate & lmbd
-    end = 1         
+    end = 1
     eta_vals = np.logspace(start, end, n)
     lmbd_vals = np.logspace(start, end, n)
     iterations = len(eta_vals) * len(lmbd_vals)
@@ -360,7 +361,7 @@ def grid_search():
             loss_epochs = net.train(X_train, y_train, epochs=epochs_max,
                                     scheduler=scheduler, dropout_retain_proba=1,
                                     verbose=False)
-            
+
             yhat = net.predict_feed_forward(X_evaluation)             # Also change to test set
             if data_mode == 2:
                 y_hat_binary = np.zeros((yhat.shape[0], 1))

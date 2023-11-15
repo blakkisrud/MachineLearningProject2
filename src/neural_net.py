@@ -149,7 +149,7 @@ class fnn():
         # print("weights", [np.shape(w) for w in self.weights])
         verbose = kwargs.get("verbose", False)
 
-        num_obs = len(y)
+        num_obs = y.shape[0]
 
         # loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
         # dC = 2 * (self.activations[-1] - y)     # derivative of squared error
@@ -282,9 +282,12 @@ class fnn():
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
 
-            if verbose:
+            if verbose and not e%100:
                 print("epoch", e, loss.shape, f"loss mean / median = {np.mean(loss):.1e} / {np.median(loss):.1e}")
-                print("\tnonzero weights:", [f"{len(np.nonzero(w))} of {len(w)}" for w in self.weights])
+
+                nonzero_percent = [np.count_nonzero(w.reshape(-1)) / np.prod(w.shape) * 100 for w in self.weights]
+                # print("\tnonzero weights:", [f"{np.count_nonzero(np.mean(w, axis=0))} of {len(w)}" for w in self.weights])
+                print(f"\tnonzero weights: {np.round(nonzero_percent, 1)} %")
 
             # loss_for_epochs.append(np.mean(loss))
             loss_for_epochs.append(np.mean(loss_for_batches))
@@ -362,6 +365,9 @@ class fnn():
 
         self.neurons_to_retain = [np.random.choice(range(dh), int(dh * self.dropout_retain_proba), replace=False) for dh in
                              self.dims_hiddens]
+        # print([dh for dh in self.dims_hiddens])
+        # print([len(nrt) for nrt in self.neurons_to_retain])
+        # sys.exit()
 
         self.weights_before_dropout = copy(self.weights)
         self.biases_before_dropout = copy(self.biases)

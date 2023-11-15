@@ -30,7 +30,7 @@ model = Sequential()
 model.add(Dense(units=1, input_dim=X_train.shape[1], activation='relu'))
 
 # Add a hidden layer with dropout
-model.add(Dense(units=64, activation='relu'))
+model.add(Dense(units=4, activation='relu'))
 #model.add(Dropout(0.5))
 
 # Add the output layer with sigmoid activation for binary classification
