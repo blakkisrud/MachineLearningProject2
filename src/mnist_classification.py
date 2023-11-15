@@ -1,44 +1,66 @@
 from project_2_utils import *
 from neural_net import fnn
 from sklearn.datasets import load_digits
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.datasets import fetch_openml
+
 import sys
 import os
 
-mnist_data = load_digits()
-mnist_images = mnist_data.images
-out_classes = mnist_data.target
-del mnist_data
+# Load data from https://www.openml.org/d/554
+X, y_orig = fetch_openml(
+    "mnist_784", version=1, return_X_y=True, as_frame=False, parser="pandas"
+)
+print(X.shape, y_orig.shape)
+
+X = X[:6000]
+y_orig = y_orig[:6000]
+y_orig = np.array([int(yi) for yi in y_orig])
+print(X.shape, y_orig.shape)
+# print(y_orig[:3])
 
 
-eta = 0.1
+# mnist_data = load_digits()    # this is not mnist
+# mnist_images = mnist_data.images
+# out_classes = mnist_data.target
+# del mnist_data
+
+
+eta = 0.01
 epochs = 100
 dropout_proba = 1.0
 loss_name = "cross-entropy"
 
-# dims_hidden = [32]
+# dims_hidden = [10]
 dims_hidden = []
 scheduler = MomentumScheduler(eta, momentum=0.9)
 
-savename = f"dims={dims_hidden}_eta={eta:.1e}_dropout={dropout_proba:.2f}.png"
+activation = sigmoid
+activation_deriv = sigmoid_derivated
+# activation = softmax
+# activation_deriv = derivate(softmax)
 
-# dims_hidden = [32]
-# scheduler = ConstantScheduler(eta)
+outcome = sigmoid
+outcome_deriv = derivate(sigmoid)
+
+
+
+savename = f"dims={dims_hidden}_eta={eta:.1e}_{activation.__name__}_{outcome.__name__}_dropout={dropout_proba:.2f}.png"
+
+
 folder_save = os.path.join("figs", "mnist classif")
 if not os.path.exists(folder_save):
     os.mkdir(folder_save)
 
 
-print(mnist_images.shape)
-print(out_classes.shape)
-print(out_classes)
-
-num_obs = len(out_classes)
-img_dims = mnist_images.shape[1:]
+num_obs = len(X)
+img_dims = [int(np.sqrt(X.shape[1])), int(np.sqrt(X.shape[1]))]
 dim_input = np.prod(img_dims)
 
-X = mnist_images.reshape(num_obs, dim_input)
-print(X.shape)
+# X = mnist_images.reshape(num_obs, dim_input)
+# print(X.shape)
 
 # plt.imshow(X[0].reshape(img_dims))
 # plt.show()
@@ -46,16 +68,23 @@ print(X.shape)
 
 # Encode outcome to vector of shape (n_obs, 10) with one 1 at index of correct image label, and remaining zeros
 dim_output = 10
-print(out_classes)
+# print(out_classes)
+
 y = np.zeros(shape=(num_obs, 10))
-for i, i_num in enumerate(out_classes):
-    y[i, i_num] = 1
-
-print(y.shape, y.reshape(-1).shape)
-print(np.count_nonzero(y.reshape(-1)))
+for i, i_num in enumerate(y_orig.ravel()):
+    y[i, int(i_num)] = 1
 
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
+print(y.shape, y.shape)
+# print(np.count_nonzero(y.reshape(-1)))
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=42)
+out_train, out_test = train_test_split(y_orig, test_size=0.30, random_state=42)
+
+print(y_train[:3])
+print(out_train[:3])
+# sys.exit()
 
 fig, ax = plt.subplots(ncols=2)
 ax[0].imshow(X_train[0].reshape(img_dims))
@@ -72,26 +101,26 @@ ax[1].imshow(X_train[0].reshape(img_dims))
 plt.close()
 # sys.exit()
 
-
-
 net = fnn(dim_input=dim_input, dim_output=dim_output, dims_hiddens=dims_hidden, learning_rate=eta, batches=3,
           loss_func_name=loss_name, scheduler=scheduler,
-          outcome_func=sigmoid, outcome_func_deriv=sigmoid_derivated,
-          activation_func=sigmoid, activation_func_deriv=sigmoid_derivated)
+          outcome_func=outcome, outcome_func_deriv=outcome_deriv,
+          activation_func=activation, activation_func_deriv=activation_deriv)
 
 net.init_random_weights_biases(verbose=True)
 loss_per_epoch = net.train(X_train, y_train, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
 # print(np.shape(loss_per_epoch))
+# print(loss_per_epoch)
+
 
 fig, ax = plt.subplots()
 ax.plot(list(range(1, epochs+1)), loss_per_epoch)
 ax.set_xlabel("epoch")
 ax.set_ylabel(loss_name)
 
-# sys.exit()
 
 yhat_test = net.predict_feed_forward(X_test)
 yhat_train = net.predict_feed_forward(X_train)
+
 
 mse_test = np.mean(mse_loss(yhat_test, y_test))
 mse_train = np.mean(mse_loss(yhat_train, y_train))
@@ -114,16 +143,28 @@ print("\ttest accuracy per outcome class:", np.round(acc_test, 2))
 
 print([np.shape(w) for w in net.weights])
 
-fig, ax = plt.subplots(ncols=5, nrows=2, figsize=(16, 8))
-ax = ax.ravel()
+
+fig, ax2 = plt.subplots(ncols=5, nrows=2, figsize=(16, 8))
+ax2 = ax2.ravel()
 
 for i, w in enumerate(net.weights[0].T):
-    ax[i].imshow(w.reshape(img_dims))
-    ax[i].set_title(i)
+    ax2[i].imshow(w.reshape(img_dims))
+    ax2[i].set_title(i)
 
-fig.suptitle(f"lr={eta:.2e}, epoch={epochs:.1e}, scheduler={type(scheduler)}, dropout_proba={dropout_proba:.2f}\n"
-             f"acc train / test = {np.mean(acc_train):.2f} / {np.mean(acc_test):.2f}")
+fig.suptitle(f"lr={eta:.2e}, epoch={epochs:.1e}, scheduler={type(scheduler)}, activation={activation.__name__}, outcome={outcome.__name__},"
+             f"\ndropout_proba={dropout_proba:.2f}, acc train / test = {np.mean(acc_train):.2f} / {np.mean(acc_test):.2f}")
 fig.tight_layout()
 
 fig.savefig(os.path.join(folder_save, savename))
+# plt.close()
+
+# Compare to sklearn logistic regression
+lr = LogisticRegression(multi_class="multinomial", penalty=None, tol=0.1, solver="saga")
+lr.fit(X_train, out_train)
+
+yhat_test_lr = lr.predict(X_test)
+acc_test_lr = accuracy_score(out_test, yhat_test_lr)
+
+print(f"Logistic regression on test: acc={acc_test_lr:.2f}")
+
 plt.show()

@@ -282,7 +282,7 @@ class fnn():
                 self.schedulers_weights[n].reset()
                 self.schedulers_biases[n].reset()
 
-            if verbose and not e%100:
+            if verbose and not e%10:
                 print("epoch", e, loss.shape, f"loss mean / median = {np.mean(loss):.1e} / {np.median(loss):.1e}")
 
                 nonzero_percent = [np.count_nonzero(w.reshape(-1)) / np.prod(w.shape) * 100 for w in self.weights]

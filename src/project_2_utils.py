@@ -203,6 +203,10 @@ def derivate(func):
 
         return func
 
+    elif func.__name__ == "sigmoid":
+
+        return sigmoid_derivated
+
     else:
         return elementwise_grad(func)
 
