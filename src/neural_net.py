@@ -1,5 +1,6 @@
 import sys
 import os
+import types
 
 import project_2_utils as utils
 from project_2_utils import ConstantScheduler
@@ -68,7 +69,6 @@ class fnn():
         self.activation_func_deriv = activation_func_deriv
         self.outcome_func = outcome_func
         self.outcome_func_deriv = outcome_func_deriv
-
         # Schedule list for Weidghts and biases
 
         self.schedulers_weights = []
@@ -231,6 +231,7 @@ class fnn():
         loss_for_epochs_test = []   # only returns if y_val is not None
 
         batch_size = X.shape[0] // self.batches
+        self.num_obs_train = X.shape[0]
 
         print("TRAINING NETWORK using the scheduler\t", scheduler) if verbose else 0
         print(f"\twith {self.batches} batches of size {batch_size}") if verbose else 0
@@ -271,9 +272,9 @@ class fnn():
                 if self.dropout_state:
                     self.dropout_reset()
 
-                if any(y_test):
+                if np.any(y_test):
                     self.predict_feed_forward(X_test)
-                    loss_test = self.loss_func(self.activations[-1], y_test, lmbd, self.weights)
+                    loss_test = self.loss_func(self.activations[-1], y_test, self.lmbd, self.weights)
                     loss_for_batches_test.append(loss_test)
 
 
@@ -292,14 +293,18 @@ class fnn():
             # loss_for_epochs.append(np.mean(loss))
             loss_for_epochs.append(np.mean(loss_for_batches))
 
-            if any(y_test):
+            if np.any(y_test):
                 loss_for_epochs_test.append(np.mean(loss_for_batches_test))
 
         self.is_trained = True
+        self.loss_for_epochs_train = loss_for_epochs
 
-        if not any(y_test):
+        if not np.any(y_test):
+            self.loss_for_epochs_test = []
             return loss_for_epochs
         else:
+            self.loss_for_epochs_test = loss_for_epochs_test
+            self.num_obs_test = X_test.shape[0]
             return loss_for_epochs, loss_for_epochs_test
 
     def find_optimal_epochs_kfold(self, X, y, epochs_max=int(2e3), k=3, **kwargs):
@@ -436,9 +441,122 @@ class fnn():
         pass
 
 
+    def save_state(self, name, folder="results", overwrite=False):
+        # SAVES: dictionary of metadata, loss for epochs during training, current weights & biases
+        savepath_meta = os.path.join(folder, name + "_meta.npy")
+        savepath_weightsbiases = os.path.join(folder, name + "_wb.npy")
+        savepath_loss = os.path.join(folder, name + "_loss.npy")
+        print("--- SAVING NN STATE", name, "---")
+        attr = dir(self)
+        attr = list(filter(lambda a: a[:2] != "__", attr))
+
+        meta_dict = {}
+        for att_nm in attr:
+            att = self.__getattribute__(att_nm)
+            try:
+                att = int(att)
+            except Exception:
+                pass
+
+            if type(att) in [str, int, float, bool]:
+                meta_dict[att_nm] = att
+
+            elif type(att) == types.FunctionType:
+                meta_dict[att_nm] = att.__name__
+
+            elif att_nm == "scheduler":
+                meta_dict[att_nm] = type(att)
+                attr_sch = list(filter(lambda a: a[:2] != "__", dir(att)))
+                for att_sch_nm in attr_sch:
+                    att_sch = att.__getattribute__(att_sch_nm)
+                    # print(att_sch_nm, type(att_sch))
+                    if not(type(att_sch)) == types.MethodType:
+                        meta_dict["scheduler." + att_sch_nm] = att_sch
+
+            elif att_nm == "dims_hiddens":
+                meta_dict[att_nm] = att
+
+        print("SAVING meta_dict in folder", folder)
+        print(meta_dict)
+        save_state = False
+
+        if os.path.exists(savepath_meta) and not overwrite:
+            print("FILE", savepath_meta, "ALREADY EXISTS. DO YOU WANT TO OVERWRITE?")
+            inp = input("y / n?\n")
+            # TODO: load meta from file, compare, create new file if not equal overwrite if equal
+            if inp == "y":
+                np.save(savepath_meta, meta_dict)
+                save_state = True
+        else:
+            np.save(savepath_meta, meta_dict)
+            save_state = True
+
+        if save_state:
+            # save weights, biases, loss during training
+            print("SAVING WEIGHTS", [np.shape(w) for w in self.weights],
+            "BIASES", [np.shape(b) for b in self.biases], "LOSS DURING TRAINING EPOCHS", np.shape(self.loss_for_epochs_train))
+
+            self.weights = np.array([*self.weights], dtype="object")
+            self.biases = np.array([*self.biases], dtype="object")
+            wb = np.array([self.weights,  self.biases], dtype="object")
+            np.save(savepath_weightsbiases, wb)
+
+            loss = [self.loss_for_epochs_train]
+            loss.append(self.loss_for_epochs_test) if any(self.loss_for_epochs_test) else None
+
+            loss = np.array(loss)
+            np.save(savepath_loss, loss)
+
+            print("\tSAVE SUCCESSFUL")
+
+        else:
+            print("\tQUITTING SAVE STATE")
+        pass
+
+
+    def load_state(self, name, folder="results"):
+        path_meta = os.path.join(folder, name + "_meta.npy")
+        path_wb = os.path.join(folder, name + "_wb.npy")
+        path_loss = os.path.join(folder, name + "_loss.npy")
+        print("--- LOADING NN STATE", name, "---")
+
+        meta_dict = np.load(path_meta, allow_pickle=True).item()
+
+        for attrs in meta_dict.items():
+            errs = ""
+            try:
+                self.__setattr__(*attrs)
+            except Exception as e:
+                errs += e + "\n"
+        del meta_dict
+
+        weights, biases = np.load(path_wb, allow_pickle=True)
+
+        self.weights = weights
+        self.biases = biases
+        print([np.shape(w) for w in weights])
+        del weights, biases
+
+        loss = np.load(path_loss)
+        print(loss.shape)
+        if loss.shape[0] == 2:
+            self.loss_for_epochs_train, self.loss_for_epochs_test = loss
+        else:
+            self.loss_for_epochs_train = loss
+        del loss
+
+        if any(errs):
+            print("\tLOADED NN-STATE with some errors:")
+            print(errs)
+        else:
+            print("\tLOADED NN-STATE with no errors :)")
+        pass
+
+
 if __name__ == "__main__":
 
     input_mode = 1
+
     valid_inputs = [1, 2]
 
     while input_mode not in valid_inputs:

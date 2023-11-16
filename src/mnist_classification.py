@@ -2,9 +2,11 @@ from project_2_utils import *
 from neural_net import fnn
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.datasets import fetch_openml
+
 
 import sys
 import os
@@ -15,8 +17,8 @@ X, y_orig = fetch_openml(
 )
 print(X.shape, y_orig.shape)
 
-X = X[:6000]
-y_orig = y_orig[:6000]
+X = X[:1000]
+y_orig = y_orig[:1000]
 y_orig = np.array([int(yi) for yi in y_orig])
 print(X.shape, y_orig.shape)
 # print(y_orig[:3])
@@ -29,12 +31,14 @@ print(X.shape, y_orig.shape)
 
 
 eta = 0.01
-epochs = 100
+epochs = 5
 dropout_proba = 1.0
+# dropout_proba = 0.8
 loss_name = "cross-entropy"
 
-# dims_hidden = [10]
-dims_hidden = []
+# dims_hidden = [64]
+# dims_hidden = [4]
+dims_hidden = [4, 3]
 scheduler = MomentumScheduler(eta, momentum=0.9)
 
 activation = sigmoid
@@ -51,8 +55,12 @@ savename = f"dims={dims_hidden}_eta={eta:.1e}_{activation.__name__}_{outcome.__n
 
 
 folder_save = os.path.join("figs", "mnist classif")
+folder_save_results = os.path.join("results", "mnist classif")
+
 if not os.path.exists(folder_save):
     os.mkdir(folder_save)
+if not os.path.exists(folder_save_results):
+    os.mkdir(folder_save_results)
 
 
 num_obs = len(X)
@@ -107,9 +115,16 @@ net = fnn(dim_input=dim_input, dim_output=dim_output, dims_hiddens=dims_hidden, 
           activation_func=activation, activation_func_deriv=activation_deriv)
 
 net.init_random_weights_biases(verbose=True)
-loss_per_epoch = net.train(X_train, y_train, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
+loss_per_epoch = net.train(X_train, y_train, X_test, y_test, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
+
 # print(np.shape(loss_per_epoch))
 # print(loss_per_epoch)
+net.save_state("mnist_test", folder=folder_save_results, overwrite=True)
+net.load_state("mnist_test", folder=folder_save_results)
+
+print(np.sum(np.mean(net.activations[-1], axis=0)))
+
+sys.exit()
 
 
 fig, ax = plt.subplots()
@@ -141,22 +156,31 @@ acc_test = accuracy_score(y_test, yhat_test_binary)
 print(f"Acc train / test = {np.mean(acc_train):.2f} / {np.mean(acc_test):.2f}")
 print("\ttest accuracy per outcome class:", np.round(acc_test, 2))
 
+auc_train = roc_auc_score(y_train, yhat_train)
+auc_test = roc_auc_score(y_test, yhat_test)
+print(f"ROC-AUC train / test = {np.mean(auc_train):.2f} / {np.mean(auc_test):.2f}")
+
+
+print(yhat_test_binary[:3])
+print(out_test[:3])
+
 print([np.shape(w) for w in net.weights])
 
+if not any(dims_hidden):
+    fig, ax2 = plt.subplots(ncols=5, nrows=2, figsize=(16, 8))
+    ax2 = ax2.ravel()
 
-fig, ax2 = plt.subplots(ncols=5, nrows=2, figsize=(16, 8))
-ax2 = ax2.ravel()
+    for i, w in enumerate(net.weights[0].T):
+        ax2[i].imshow(w.reshape(img_dims))
+        ax2[i].set_title(i)
 
-for i, w in enumerate(net.weights[0].T):
-    ax2[i].imshow(w.reshape(img_dims))
-    ax2[i].set_title(i)
+    fig.suptitle(f"lr={eta:.2e}, epoch={epochs:.1e}, scheduler={type(scheduler)}, activation={activation.__name__}, outcome={outcome.__name__},"
+                 f"\ndropout_proba={dropout_proba:.2f}, acc train / test = {np.mean(acc_train):.2f} / {np.mean(acc_test):.2f}")
+    fig.tight_layout()
 
-fig.suptitle(f"lr={eta:.2e}, epoch={epochs:.1e}, scheduler={type(scheduler)}, activation={activation.__name__}, outcome={outcome.__name__},"
-             f"\ndropout_proba={dropout_proba:.2f}, acc train / test = {np.mean(acc_train):.2f} / {np.mean(acc_test):.2f}")
-fig.tight_layout()
-
-fig.savefig(os.path.join(folder_save, savename))
+    fig.savefig(os.path.join(folder_save, savename))
 # plt.close()
+
 
 # Compare to sklearn logistic regression
 lr = LogisticRegression(multi_class="multinomial", penalty=None, tol=0.1, solver="saga")

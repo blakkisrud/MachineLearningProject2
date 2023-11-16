@@ -124,8 +124,6 @@ elif data_mode == 2:
     y = y.values.reshape(-1, 1)
 
 
-
-
     output_dim = 1
     input_dim = X.shape[1]
 
@@ -154,10 +152,10 @@ y_evaluation = y[idx_evaluation]
 # Set up parameters for the FFN
 
 activation_func_list = [
-                        utils.sigmoid,
-                        utils.RELU,
-                        utils.LRELU,
-                        # utils.softmax
+                        # utils.sigmoid,
+                        # utils.RELU,
+                        # utils.LRELU,
+                        utils.softmax
                         ]
 
 schedule_list = [
@@ -179,7 +177,7 @@ error_log = ""
 
 
 max_loss = 0
-'''
+
 for activation_func in activation_func_list:
 
     for scheduler in schedule_list:
@@ -323,7 +321,7 @@ for activation_func in activation_func_list:
             error_log += f"Exception: {e}\n" + f"Activation function: {activation_func.__name__}\n" + f"Scheduler: {scheduler.__class__.__name__}\n"
 
             continue
-'''
+sys.exit()
 
 def grid_search():
     # TODO: Change to test set, or include both, test & training accuracy
