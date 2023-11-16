@@ -220,10 +220,20 @@ class fnn():
 
         return loss
 
-    def train(self, X, y, X_test=[], y_test=[], scheduler=None, epochs=100, **kwargs):
+    def train(self, X, y, X_test=[], y_test=[], scheduler=None, **kwargs):
         """
         Train network on input data X with ground truth y
         """
+
+
+        epochs = kwargs.get("epochs", None)
+        if not epochs:
+            try:
+                epochs = self.__getattribute__("epochs")
+            except Exception as e:
+                print(*e.args)
+                sys.exit()
+        self.epochs = epochs
 
         t0 = time.time()
 
@@ -584,6 +594,18 @@ class fnn():
             print(errs)
         else:
             print("\tLOADED NN-STATE with no errors :)")
+        pass
+
+
+    def update_parameters(self, params_new):
+        for key, val in params_new.items():
+            if key.split(".")[0].lower() == "scheduler":
+                # print(key, val)
+                key = key.split(".")[-1]
+                self.scheduler.__setattr__(key, val)
+            else:
+                # print(key, val)
+                self.__setattr__(key, val)
         pass
 
 
