@@ -1,6 +1,7 @@
 import sys
 import os
 import types
+import time
 
 import project_2_utils as utils
 from project_2_utils import ConstantScheduler
@@ -26,6 +27,7 @@ from matplotlib import pyplot as plt
                     
 from sklearn.utils import resample
 
+# from numba import jit
 
 class fnn():
     def __init__(self, dim_input, dim_output, dims_hiddens,
@@ -144,6 +146,7 @@ class fnn():
         self.A = Al
         return Al
 
+
     def backpropagate(self, y, **kwargs):
 
         """
@@ -221,6 +224,9 @@ class fnn():
         """
         Train network on input data X with ground truth y
         """
+
+        t0 = time.time()
+
         if scheduler == None:
             scheduler = self.scheduler
 
@@ -247,6 +253,7 @@ class fnn():
         #X, y = resample(X, y) # Resample the data for the mini-batches
 
         for e in range(epochs):
+            te0 = time.time()
 
             loss_for_batches = []
             loss_for_batches_test = []
@@ -288,17 +295,19 @@ class fnn():
                 self.schedulers_biases[n].reset()
 
             if verbose and not e%10:
+                te1 = time.time()
                 print("epoch", e, loss.shape, f"loss mean / median = {np.mean(loss):.1e} / {np.median(loss):.1e}")
 
                 nonzero_percent = [np.count_nonzero(w.reshape(-1)) / np.prod(w.shape) * 100 for w in self.weights]
                 # print("\tnonzero weights:", [f"{np.count_nonzero(np.mean(w, axis=0))} of {len(w)}" for w in self.weights])
-                print(f"\tnonzero weights: {np.round(nonzero_percent, 1)} %")
-
+                print(f"\tnonzero weights: {np.round(nonzero_percent, 1)} %", end="\t")
+                print(f"time / epoch = {te1-te0:.2e} s, total training time = {(te1-t0)/60:.3g} min")
             # loss_for_epochs.append(np.mean(loss))
             loss_for_epochs.append(np.mean(loss_for_batches))
 
             if np.any(y_test):
                 loss_for_epochs_test.append(np.mean(loss_for_batches_test))
+
 
         self.is_trained = True
         self.loss_for_epochs_train = loss_for_epochs

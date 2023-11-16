@@ -137,7 +137,6 @@ elif data_mode == 2:
     # outcome_func_deriv = utils.derivate(utils.sigmoid)
 
 
-# TODO: resevere test set NOT for training
 idx = np.arange(len(y))
 
 assert len(idx) == X.shape[0]
