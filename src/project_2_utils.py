@@ -369,6 +369,65 @@ def general_stochastic_gradient_descent(X, y, beta, scheduler,
 
         return beta
 
+def general_minibatch_gradient_descent(X, y, beta, scheduler,
+                                        cost_func,
+                                        mini_batch_size,
+                                        gradient_cost_func,
+                                        epsilon = 1.0e-4,
+                                        max_iterations = 100000,
+                                        return_diagnostics = False):
+    """
+    This is the general stochastic gradient descent, can be performed with
+    all cost functions and gradients (that need to be analytically defined)
+    """
+
+    if return_diagnostics:
+        mse_vector = []
+        beta_vector = []
+        iteration_vec = []
+
+    n = int((X.shape[0]))
+
+    for iter in range(max_iterations):
+
+        shuffled_indices = np.random.permutation(n)
+        X_shuffled = X[shuffled_indices]
+        y_shuffled = y[shuffled_indices]
+
+        for i in range(0, n, mini_batch_size):
+
+            X_mini = X_shuffled[i:i+mini_batch_size]
+            y_mini = y_shuffled[i:i+mini_batch_size]
+
+            gradient = gradient_cost_func(X_mini, y_mini, beta)
+            change = scheduler.update_change(gradient)
+            beta -= change
+            if (np.linalg.norm(gradient) < epsilon):
+                print("Gradient descent converged")
+                break
+
+        if return_diagnostics:
+            y_predict = X.dot(beta)
+            mse = np.mean((y-y_predict)**2.0)
+
+            mse_vector.append(mse)
+            beta_vector.append(beta)
+            iteration_vec.append(iter)
+
+    print("Number of iterations: ", iter)
+
+    if return_diagnostics:
+            
+            diagnostic_output = {"mse": mse_vector,
+                                "beta_vector": beta_vector,
+                                "iteration": iteration_vec,
+                                "beta": beta}
+    
+            return diagnostic_output
+    
+    else:
+
+        return beta
 
 
 def time_step_length(t, t0, t1):
@@ -377,6 +436,36 @@ def time_step_length(t, t0, t1):
     """
 
     return t0/(t + t1)
+
+def OLS(X, z):
+    """
+    X: Design matrix
+    z: Data
+
+    Returns: MSE, R2, z_tilde, beta
+
+    """
+
+    beta = np.linalg.pinv(X.T.dot(X)).dot(X.T).dot(z)
+    z_tilde = X.dot(beta)
+
+    return beta
+
+def Ridge(X, z, lmbd):
+
+    """
+    X: Design matrix
+    z: Data
+    lmbd: The lambda parameter
+
+    Returns: MSE, R2, z_tilde, beta
+
+    """
+
+    beta = np.linalg.pinv(X.T.dot(X) + lmbd*np.identity(X.shape[1])).dot(X.T).dot(z)
+    z_tilde = X.dot(beta)
+
+    return beta
 
 def simple_func(x, a0, a1, a2, noise_sigma = 0.0):
     """
@@ -591,3 +680,74 @@ def gradient_descent_with_time_decay(X, y, beta, eta0, minibatch_size=5):
         scores.append(mse)
 
     return beta, scores
+
+def RIDGE_with_hp(X, y, hp_dict):
+
+    """
+    Ridge with hp-tuning
+
+    """
+
+    if "lmbd" not in hp_dict.keys():
+
+        print("You need to specify a lambda value")
+        return None
+    
+    else:
+
+        lmbd = hp_dict["lmbd"]
+
+    n = int((X.shape[0]))
+
+    beta = np.linalg.pinv(X.T.dot(X) + lmbd*np.identity(X.shape[1])).dot(X.T).dot(y)
+
+    return beta
+
+def k_fold_hyper_parameter_tuning(X, y, function, hp_dict, k = 5):
+
+    """
+    Function to perform k-fold cross validation
+    TODO: Make this work with all the different ways of performing
+    ML
+    """
+
+    n = int((X.shape[0]))
+
+    idx = np.arange(n)
+
+    np.random.shuffle(idx)
+
+    idx_folds = np.array_split(idx, k)
+
+    mse_by_lambda = np.zeros(len(hp_dict["lmbd"]))
+    
+    for i, lmbd in enumerate(hp_dict["lmbd"]):
+
+        mse_by_fold = np.zeros(k)
+
+        for j in range(k):
+
+            idx_test = idx_folds[j]
+            idx_train = np.concatenate(idx_folds[:j] + idx_folds[j+1:])
+
+            X_train_fold = X[idx_train,:]
+            X_test_fold = X[idx_test,:]
+
+            y_train_fold = y[idx_train]
+            y_test_fold = y[idx_test]
+
+            beta_ridge = function(X_train_fold, y_train_fold, lmbd)
+
+            y_pred = X_test_fold @ beta_ridge
+
+            mse = mean_squared_error(y_test_fold, y_pred)
+
+            mse_by_fold[j] = mse
+
+        mse_by_lambda[i] = np.mean(mse_by_fold)
+
+    optimal_lambda = hp_dict["lmbd"][np.argmin(mse_by_lambda)]
+
+    return optimal_lambda
+
+

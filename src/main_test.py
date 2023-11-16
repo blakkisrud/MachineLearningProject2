@@ -33,7 +33,6 @@ from project_2_utils import RMS_propScheduler
 
 from neural_net import fnn
 
-
 # MAIN HYPERVARIABLES
 # FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
 
@@ -41,7 +40,6 @@ from neural_net import fnn
 data_mode = 2
 data_mode_names = {1: "simple_1d_function",
                    2: "wisconsin_classif"}  # add MNIST, Franke, terrain ?
-
 
 # NETWORK PARAMETERS
 

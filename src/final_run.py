@@ -99,12 +99,12 @@ list_of_act_funcs = [
                     #utils.LRELU
                     ]
 
-list_of_schedulers = [AdamScheduler(lr, 0.9, 0.999), 
-                      ConstantScheduler(lr), 
-                      MomentumScheduler(lr, 0.9), 
-                      RMS_propScheduler(lr, 0.9)]
+list_of_schedulers = [AdamScheduler(lr, 0.9, 0.999)]
+                      #ConstantScheduler(lr), 
+                      #MomentumScheduler(lr, 0.9), 
+                      #RMS_propScheduler(lr, 0.9)]
 
-list_of_network_design = [[128]]
+list_of_network_design = [[30,30,1]]
 
 list_of_runs = []
 
