@@ -31,14 +31,14 @@ print(X.shape, y_orig.shape)
 
 
 eta = 0.01
-epochs = 5
+epochs = 5000
 dropout_proba = 1.0
 # dropout_proba = 0.8
 loss_name = "cross-entropy"
 
 # dims_hidden = [64]
 # dims_hidden = [4]
-dims_hidden = [4, 3]
+dims_hidden = []
 scheduler = MomentumScheduler(eta, momentum=0.9)
 
 activation = sigmoid
@@ -110,21 +110,16 @@ plt.close()
 # sys.exit()
 
 net = fnn(dim_input=dim_input, dim_output=dim_output, dims_hiddens=dims_hidden, learning_rate=eta, batches=3,
-          loss_func_name=loss_name, scheduler=scheduler,
+          loss_func_name=loss_name, scheduler=scheduler, normalize_outcome=True,
           outcome_func=outcome, outcome_func_deriv=outcome_deriv,
           activation_func=activation, activation_func_deriv=activation_deriv)
 
 net.init_random_weights_biases(verbose=True)
-loss_per_epoch = net.train(X_train, y_train, X_test, y_test, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
+loss_per_epoch, _ = net.train(X_train, y_train, X_test, y_test, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
 
-# print(np.shape(loss_per_epoch))
-# print(loss_per_epoch)
+
 net.save_state("mnist_test", folder=folder_save_results, overwrite=True)
 net.load_state("mnist_test", folder=folder_save_results)
-
-print(np.sum(np.mean(net.activations[-1], axis=0)))
-
-sys.exit()
 
 
 fig, ax = plt.subplots()
@@ -134,6 +129,7 @@ ax.set_ylabel(loss_name)
 
 
 yhat_test = net.predict_feed_forward(X_test)
+
 yhat_train = net.predict_feed_forward(X_train)
 
 

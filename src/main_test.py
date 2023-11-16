@@ -152,10 +152,10 @@ y_evaluation = y[idx_evaluation]
 # Set up parameters for the FFN
 
 activation_func_list = [
-                        # utils.sigmoid,
+                        utils.sigmoid,
                         # utils.RELU,
                         # utils.LRELU,
-                        utils.softmax
+                        # utils.softmax
                         ]
 
 schedule_list = [

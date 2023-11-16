@@ -29,9 +29,9 @@ from sklearn.utils import resample
 
 class fnn():
     def __init__(self, dim_input, dim_output, dims_hiddens,
-                 activation_func, outcome_func, 
+                 activation_func, outcome_func,
                  activation_func_deriv, outcome_func_deriv,
-                 loss_func_name="MSE",
+                 loss_func_name="MSE", normalize_outcome=False,
                  learning_rate=1e-4,
                  lmbd = 0.0,
                  max_iterations=1000,
@@ -46,6 +46,7 @@ class fnn():
 
         self.loss_func_name = loss_func_name
         self.lmbd = lmbd
+        self.normalize_outcome = normalize_outcome
 
         # INITIALIZING LOSS FUNCTION
         if loss_func_name.upper() == "MSE":
@@ -132,6 +133,9 @@ class fnn():
 
             if i > self.num_hidden_layers:  # FINAL LAYER
                 Al = self.outcome_func(Zl)
+                if self.normalize_outcome:
+                    Al_sum = np.sum(Al, axis=1, keepdims=True)
+                    Al /= Al_sum
             else:                           # HIDDEN LAYERS
                 Al = self.activation_func(Zl)
 
@@ -453,16 +457,17 @@ class fnn():
         meta_dict = {}
         for att_nm in attr:
             att = self.__getattribute__(att_nm)
-            try:
-                att = int(att)
-            except Exception:
-                pass
+            # try:
+            #     att = int(att)
+            # except Exception:
+            #     pass
 
             if type(att) in [str, int, float, bool]:
                 meta_dict[att_nm] = att
 
             elif type(att) == types.FunctionType:
                 meta_dict[att_nm] = att.__name__
+                # meta_dict[att_nm] = att
 
             elif att_nm == "scheduler":
                 meta_dict[att_nm] = type(att)
@@ -496,9 +501,18 @@ class fnn():
             print("SAVING WEIGHTS", [np.shape(w) for w in self.weights],
             "BIASES", [np.shape(b) for b in self.biases], "LOSS DURING TRAINING EPOCHS", np.shape(self.loss_for_epochs_train))
 
-            self.weights = np.array([*self.weights], dtype="object")
-            self.biases = np.array([*self.biases], dtype="object")
-            wb = np.array([self.weights,  self.biases], dtype="object")
+            if np.any(self.dims_hiddens):
+                weights = np.array([*self.weights], dtype="object")
+                biases = np.array([*self.biases], dtype="object")
+
+            else:
+                weights = np.array(*self.weights, dtype="object")
+                biases = np.array(*self.biases, dtype="object")
+
+            # print(np.shape(self.weights))
+            # sys.exit()
+
+            wb = np.array([weights,  biases], dtype="object")
             np.save(savepath_weightsbiases, wb)
 
             loss = [self.loss_for_epochs_train]
@@ -522,23 +536,34 @@ class fnn():
 
         meta_dict = np.load(path_meta, allow_pickle=True).item()
 
-        for attrs in meta_dict.items():
-            errs = ""
+        errs = ""
+        for attr_key, attr_val in meta_dict.items():
             try:
-                self.__setattr__(*attrs)
+                if "func" in attr_key and attr_key != "loss_func_name":
+                    func = getattr(utils, attr_val)     # pray that function is in utils
+                    self.__setattr__(attr_key, func)
+                else:
+                    self.__setattr__(attr_key, attr_val)
             except Exception as e:
-                errs += e + "\n"
+                errs += str(e) + "\n"
+        print(meta_dict)
         del meta_dict
 
         weights, biases = np.load(path_wb, allow_pickle=True)
 
-        self.weights = weights
-        self.biases = biases
-        print([np.shape(w) for w in weights])
+        if np.any(self.dims_hiddens):
+            self.weights = weights
+            self.biases = biases
+        else:
+            self.weights = [weights]
+            self.biases = [biases]
+
+        self.weights = [w.astype(float) for w in self.weights]
+        self.biases = [b.astype(float) for b in self.biases]
         del weights, biases
 
         loss = np.load(path_loss)
-        print(loss.shape)
+        # print(loss.shape)
         if loss.shape[0] == 2:
             self.loss_for_epochs_train, self.loss_for_epochs_test = loss
         else:
