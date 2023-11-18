@@ -9,12 +9,14 @@ import autograd.numpy as np
 from autograd import grad
 import matplotlib.pyplot as plt
 from autograd import elementwise_grad
+import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 
 """
 LOSS FUNCTIONS'
@@ -316,13 +318,13 @@ def general_gradient_descent(X, y, beta, scheduler,
 
         return beta
 
-def general_stochastic_gradient_descent(X, y, beta, scheduler,
+def general_stochastic_gradient_descent(X, y, beta, 
+                                        scheduler,
                                         cost_func,
                                         mini_batch_size,
                                         epochs,
                                         gradient_cost_func,
                                         epsilon = 1.0e-4,
-                                        max_iterations = 100000,
                                         return_diagnostics = False):
 
     """
@@ -330,31 +332,85 @@ def general_stochastic_gradient_descent(X, y, beta, scheduler,
     all cost functions and gradients (that need to be analytically defined)
     """
 
-    if return_diagnostics:
-        mse_vector = []
-        beta_vector = []
-        iteration_vec = []
-
     n = int((X.shape[0]))
 
-    for iter in range(max_iterations):
-        i = np.random.randint(n)
-        gradient = gradient_cost_func(X[i:i+1], y[i:i+1], beta)
-        change = scheduler.update_change(gradient)
-        beta -= change
-        if (np.linalg.norm(gradient) < epsilon):
-            print("Gradient descent converged")
-            break
+    indices = np.arange(n)
 
-        if return_diagnostics:
-            y_predict = X.dot(beta)
-            mse = np.mean((y-y_predict)**2.0)
+    n_iterations = epochs * n // mini_batch_size
 
-            mse_vector.append(mse)
+    mse_by_epoch = []
+    beta_by_epoch = []
+
+    best_mse = 1e9
+
+    for epoch in range(epochs):
+
+        beta_vector = []
+        mse_in_batch = np.zeros(n_iterations)
+
+        for iteration, i in zip(range(n_iterations), range(n_iterations)):
+
+            # Sample with replacement
+
+            idx = np.random.choice(indices, size=mini_batch_size, 
+                                   replace=False)
+            
+            xi = X[idx]
+            yi = y[idx]
+
+            gradient = gradient_cost_func(xi, yi, beta)
+            change = scheduler.update_change(gradient)
+
+            beta -= change
+
+            y_pred = X.dot(beta)
+
+            mse = np.mean((y-y_pred)**2.0)
+
+            mse_in_batch[i] = mse
             beta_vector.append(beta)
-            iteration_vec.append(iter)
+
+
+        # Find the optimal beta
+
+        smallest_mse_in_batch = np.min(mse_in_batch)
+        optimal_beta = beta_vector[np.argmin(mse_in_batch)]
+
+        mse_by_epoch.append(smallest_mse_in_batch)
+        beta_by_epoch.append(optimal_beta)
+
+    optimal_beta_over_epochs = beta_by_epoch[np.argmin(mse_by_epoch)]
+    smallest_mse_over_epochs = np.min(mse_by_epoch)
+
+    return optimal_beta_over_epochs, smallest_mse_over_epochs
+
+    
+
+
+
+
+
+
+
+
+        # For the epoch, find the 
+
+
+            #if (np.linalg.norm(gradient) < epsilon):
+            #    print("Gradient descent converged")
+            #    break
+
+        #if return_diagnostics:
+        #    y_predict = X.dot(beta)
+        #    mse = np.mean((y-y_predict)**2.0)
+
+        #    mse_vector.append(mse)
+        #    beta_vector.append(beta)
+        #    iteration_vec.append(iter)
 
     print("Number of iterations: ", iter)
+
+        
 
     if return_diagnostics:
 
@@ -590,10 +646,15 @@ def eta_from_hessian(X):
 
     return 1.0/np.max(EigValues)
 
-def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBOSE = False):
+def gradient_descent_with_minibatches(X, y, 
+                                      beta, eta, 
+                                      minibatch_size = 5, 
+                                      VERBOSE = False):
 
     n_epochs = 50
     n = int((X.shape[0]))
+
+    indices = np.arange(n)
 
     np.random.seed(42)
 
@@ -602,15 +663,19 @@ def gradient_descent_with_minibatches(X, y, beta, eta, minibatch_size = 5, VERBO
     scores = []
 
     for epoch in range(n_epochs):
-        shuffled_indices = np.random.permutation(n)
-        X_shuffled = X[shuffled_indices]
-        y_shuffled = y[shuffled_indices]
+        
         for iteration in range(n_iterations):
-            start_idx = iteration * minibatch_size
-            end_idx = start_idx + minibatch_size
-            xi = X_shuffled[start_idx:end_idx]
-            yi = y_shuffled[start_idx:end_idx]
+
+            # Sample with replacement
+
+            idx = np.random.choice(indices, size=minibatch_size, 
+                                   replace=False) # False for this run to not select same in each iteration
+            
+            xi = X[idx]
+            yi = y[idx]
+
             gradient = 2/minibatch_size * xi.T.dot(xi.dot(beta) - yi)
+            
             beta = beta - eta * gradient
 
         if VERBOSE:
@@ -749,5 +814,36 @@ def k_fold_hyper_parameter_tuning(X, y, function, hp_dict, k = 5):
     optimal_lambda = hp_dict["lmbd"][np.argmin(mse_by_lambda)]
 
     return optimal_lambda
+
+def sgd_tuning(X, y, list_of_etas, list_of_batch_sizes, k_folds, fixed_params):
+
+    """
+    Function to perform k-fold cross validation
+    hp-tuning of the sgd-function
+    """
+
+    grid_table = pd.DataFrame(columns=["eta", "batch_size", "mse"])
+
+    for eta in list_of_etas:
+
+        for batch_size in list_of_batch_sizes:
+
+            kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+            
+            current_fold = 1 # Hacky
+
+            for train_index, test_index in kfold.split(X):
+
+                try:
+
+                    print("Doing SGD")
+
+                except:
+
+                    print("Something went wrong")
+                    continue
+
+
+    return None
 
 
