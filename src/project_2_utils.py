@@ -32,12 +32,16 @@ def mse_loss(yhat, y, lmbd=0.0, w=0):
 def mse_loss_deriv(yhat, y):
     return 2 * (yhat - y)
 
-def cross_entropy_loss(yhat, y, lmbd=0.0, w=0):
+def cross_entropy_loss(yhat, y, lmbd=0.0, w=0, l1_ratio=0.0):
     if lmbd == 0.0:
         return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat))
     else:
-        l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
-        return - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat)) + l2_regularization
+        # regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
+        regularization = lmbd * np.sum([(1 - l1_ratio) * np.sum(weights**2) + l1_ratio * np.sum(np.abs(weights)) for weights in w])
+        loss = - (y * np.log(yhat) + (1 - y) * np.log(1 - yhat)) + regularization
+        # print(loss.shape)
+        # sys.exit()
+        return loss
     
 def cross_entropy_loss_deriv(yhat, y):
     return (yhat - y) / (yhat * (1 - yhat))
@@ -750,4 +754,13 @@ def k_fold_hyper_parameter_tuning(X, y, function, hp_dict, k = 5):
 
     return optimal_lambda
 
+
+class exploratory_data_analysis():
+    def __init__(self):
+        pass
+
+    def update_attr(self, attr):
+        for key, val in attr.items():
+            self.__setattr__(key, val)
+        print("Updating attributes:", attr)
 
