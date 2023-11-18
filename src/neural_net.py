@@ -26,6 +26,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from matplotlib import pyplot as plt
                     
 from sklearn.utils import resample
+from sklearn.model_selection import KFold
 
 # from numba import jit
 
@@ -607,6 +608,83 @@ class fnn():
                 # print(key, val)
                 self.__setattr__(key, val)
         pass
+
+
+def grid_search(X, y, data_mode, input_dim, output_dim, dims_hidden, loss_func_name, num_batches, epochs_max):
+    """
+    Search for optimal learning rate and regularization parameters
+    X:          Input data
+    y:          Output data
+    datamode:   1 for polynome, 2 for binary classification
+    Rest:       Parameters of NN
+    """
+
+    n = 10       # Tests for learning rate and hyperparameter
+    start = -8   # In log_10 scale for learning rate & lmbd
+    end = 1
+    n_splits= 5
+    learning_vals = np.logspace(start, end, n)
+    lmbd_vals = np.logspace(start, end, n)
+    iterations = len(learning_vals) * len(lmbd_vals)
+    iter = 0
+
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    accuracy_kfolds = np.zeros((n_splits,n,n))
+
+    # Functions and scheduler aren't significant for finding optimal eta & lmbd values, they are investigated in a later stage
+    outcome_func = utils.sigmoid
+    outcome_func_deriv = utils.derivate(utils.sigmoid)
+    activation_func = utils.RELU
+    activation_func_deriv = utils.derivate(utils.RELU)
+
+    for i, eta in enumerate(learning_vals):
+
+        scheduler = AdamScheduler(eta, 0.9, 0.999)
+
+        for j, lmbd in enumerate(lmbd_vals):
+            iter += 1
+            print(f'Breaking News: Now on iteration {iter}/{iterations}!')
+            
+            counter = 0
+            for train_idx, test_idx in kfold.split(X):
+
+                X_train, X_evaluation = X[train_idx], X[test_idx]
+                y_train, y_evaluation = y[train_idx], y[test_idx]
+
+                net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=eta, loss_func_name=loss_func_name,
+                        activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
+                        outcome_func_deriv=outcome_func_deriv,
+                        batches=num_batches,
+                        lmbd=lmbd,
+                        scheduler=scheduler, random_state=42)
+
+
+                loss_epochs = net.train(X_train, y_train, epochs=epochs_max,
+                                        scheduler=scheduler, dropout_retain_proba=1,
+                                        verbose=False)
+                
+                yhat = net.predict_feed_forward(X_evaluation)
+
+                if data_mode == 2:
+                    y_hat_binary = np.zeros((yhat.shape[0], 1))
+                    y_hat_binary[yhat > 0.5] = 1
+                    acc = accuracy_score(y_evaluation, y_hat_binary)
+                    accuracy_kfolds[counter][i][j] = np.mean(acc)
+                else:
+                    MSE = np.sum(utils.mse_loss(yhat, y))
+                    accuracy_kfolds[counter][i][j] = MSE             
+                counter += 1
+            
+    accuracy_kfolds = np.mean(accuracy_kfolds, axis=0)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    sns.heatmap(accuracy_kfolds, annot=True, ax=ax, cmap="viridis", fmt=".3f")
+    ax.set_title("Test Accuracy")
+    ax.set_ylabel("$log_{10}(\eta)$")
+    ax.set_xticks(np.linspace(1, n, n)-0.5, np.linspace(start, end, n))
+    ax.set_yticks(np.linspace(1, n, n)-0.5, np.linspace(start, end, n))
+    ax.set_xlabel("$log_{10}(\lambda)$")
+    plt.show()
 
 
 if __name__ == "__main__":
