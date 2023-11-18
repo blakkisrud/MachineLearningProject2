@@ -40,7 +40,9 @@ class fnn():
                  max_iterations=1000,
                  epsilon = 1.0e-8,
                  batches = 1,
-                 scheduler=None, random_state=42):
+                 scheduler=None, random_state=42, **kwargs):
+
+        self.epochs = kwargs.get("epochs", 10)
 
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -49,6 +51,7 @@ class fnn():
 
         self.loss_func_name = loss_func_name
         self.lmbd = lmbd
+        self.l1_ratio = kwargs.get("l1_ratio", 0.0)
         self.normalize_outcome = normalize_outcome
 
         # INITIALIZING LOSS FUNCTION
@@ -86,7 +89,7 @@ class fnn():
         # self.weights = [np.random.randn(self.layer_sizes[i], self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
         # self.biases = [np.random.randn(self.layer_sizes[i+1]) for i in range(len(self.dims_hiddens) + 1)]
 
-        self.init_random_weights_biases()
+        self.init_random_weights_biases(verbose=True)
 
         self.learning_rate = learning_rate # TODO: make dynamic
 
@@ -162,7 +165,7 @@ class fnn():
         # loss = np.square(self.activations[-1] - y)     # prediction - ground truth squared
         # dC = 2 * (self.activations[-1] - y)     # derivative of squared error
 
-        loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights)
+        loss = self.loss_func(self.activations[-1], y, self.lmbd, self.weights, self.l1_ratio)
         dC = self.loss_func_deriv(self.activations[-1], y)
 
         # print(loss.shape, np.mean(loss))
@@ -196,7 +199,8 @@ class fnn():
             delta_l = dC * f_deriv_zl
 
             # cost rate of change with respect to weights and biases in layer l
-            dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*self.weights[l]
+            # dW = np.dot(self.activations[l].T, delta_l)+self.lmbd*self.weights[l]
+            dW = np.dot(self.activations[l].T, delta_l) + (1 - self.l1_ratio) * self.lmbd * self.weights[l] + self.l1_ratio * self.lmbd * np.sign(self.weights[l])
             db = np.sum(delta_l, axis=0)
 
 
@@ -207,6 +211,7 @@ class fnn():
 
             # update weights and biases here
 
+            # TODO: regularization term here?
             change_weights = (self.schedulers_weights[l].update_change(dW))/num_obs
             change_biases = (self.schedulers_biases[l].update_change(db))/num_obs
 
@@ -296,7 +301,7 @@ class fnn():
 
                 if np.any(y_test):
                     self.predict_feed_forward(X_test)
-                    loss_test = self.loss_func(self.activations[-1], y_test, self.lmbd, self.weights)
+                    loss_test = self.loss_func(self.activations[-1], y_test, self.lmbd, self.weights, self.l1_ratio)
                     loss_for_batches_test.append(loss_test)
 
 
@@ -319,7 +324,7 @@ class fnn():
             if np.any(y_test):
                 loss_for_epochs_test.append(np.mean(loss_for_batches_test))
 
-
+        self.time_to_train = time.time() - t0
         self.is_trained = True
         self.loss_for_epochs_train = loss_for_epochs
 
