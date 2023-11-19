@@ -21,6 +21,8 @@ from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 
+import seaborn as sns
+
 """
 LOSS FUNCTIONS'
 - MSE 
@@ -278,6 +280,7 @@ def random_forest(X_train, y_train, X_eval, y_eval):
     return mse, accuracy
 
 def general_gradient_descent(X, y, beta, scheduler,
+                             cost_func, # Not in use
                              gradient_cost_func,
                              epsilon = 1.0e-4,
                              max_iterations = 1000000,
@@ -1020,6 +1023,12 @@ def ffn_tuning(X, y, net, folds, hp_dict):
 
     return None
 
+def plot_heatmap_from_tuning(grid_table, param1, param2):
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    grid_table_pivot = grid_table.pivot(param1, param2, "MSE_test")
+    sns.heatmap(grid_table_pivot, annot=True, ax=ax)
+    plt.show()
 
 class exploratory_data_analysis():
     def __init__(self):
