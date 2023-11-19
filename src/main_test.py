@@ -158,12 +158,12 @@ activation_func_list = [
 ]
 
 schedule_list = [
-    ConstantScheduler(lr)
-    # ConstantScheduler(0.1),
-    # MomentumScheduler(0.1, 0.9),
-    # AdagradScheduler(0.1),
-    # RMS_propScheduler(0.1, 0.9),
-    # AdamScheduler(0.1, 0.9, 0.999),
+    # ConstantScheduler(lr)
+    ConstantScheduler(0.1),
+    MomentumScheduler(0.1, 0.9),
+    AdagradScheduler(0.1),
+    RMS_propScheduler(0.1, 0.9),
+    AdamScheduler(0.1, 0.9, 0.999),
 ]
 
 print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")

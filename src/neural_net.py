@@ -3,6 +3,8 @@ import os
 import types
 import time
 
+import pandas as pd
+
 import project_2_utils as utils
 from project_2_utils import ConstantScheduler
 from project_2_utils import MomentumScheduler
@@ -377,6 +379,80 @@ class fnn():
             return epochs_opt
         else:
             return epochs_opt, loss_training, loss_validation
+
+    def find_optimal_hps_kfold(self, X, y, epochs_max=int(2e3), k=3, hp_dict={}, **kwargs):
+        from itertools import product
+        from sklearn.model_selection import KFold
+
+        save_path = kwargs.get("save_path", None)
+        load_precomputed = kwargs.get("load_precomputed", None)
+
+        if not load_precomputed:
+            dims_hps = [len(hp) for hp in hp_dict.values()]
+            num_hps = len(hp_dict)
+
+            hp_combinations = list(product(*hp_dict.values()))
+
+            return_loss_values = kwargs.get("return_loss_values", False)
+            # plot = kwargs.get("plot", True)
+            verbose = kwargs.get("verbose", False)
+
+            print(f"FINDING optimal number of epochs,", hp_dict, f"using {k}-fold validation")
+            print("\tnumber of hp-combinations / hps", np.shape(hp_combinations), f"max epochs={epochs_max}")
+
+            df_scores = pd.DataFrame()
+
+            for i, hps_curr in enumerate(hp_combinations):
+                hp_dict_curr = dict(zip(hp_dict.keys(), hps_curr))
+                t0 = time.time()
+                print(i, "of", len(hp_combinations), hp_dict_curr, end="\t")
+                self.update_parameters(hp_dict_curr)
+
+                # Training / validation average loss over epochs for each fold k
+                loss_training = []
+                loss_validation = []
+
+                ki = -1
+                for ind_train, ind_val in KFold(n_splits=k, shuffle=True, random_state=self.random_state).split(X, y):
+                    x_train, y_train = X[ind_train], y[ind_train]
+                    x_val, y_val = X[ind_val], y[ind_val]
+                    ki += 1
+                    # print("\tk=", ki)
+
+                    self.init_random_weights_biases()  # reset weights and biases
+                    loss_train_k, loss_val_k = self.train(x_train, y_train, X_test=x_val, y_test=y_val, epochs=epochs_max, **kwargs)
+
+                    loss_training.append(loss_train_k)
+                    loss_validation.append(loss_val_k)
+
+                loss_val_mean = np.mean(loss_validation, axis=0)
+                epochs_opt = np.argmin(loss_val_mean) + 1
+                loss_min = loss_val_mean[epochs_opt - 1]
+
+
+                df_scores.loc[i, "epochs"] = epochs_opt
+                df_scores.loc[i, [*hp_dict_curr.keys()]] = hp_dict_curr.values()
+                df_scores.loc[i, "loss"] = loss_min
+
+                t1 = time.time()
+                dt = t1 - t0
+                print(f"dt = {dt:.3g} s (loss_min={loss_min:.2e})")
+
+            if save_path:
+                df_scores.to_csv(save_path)
+                print("\tsaved optimal hps at", save_path)
+
+        else:
+            print("LOADING pre-computed hp-tuning from", save_path)
+            df_scores = pd.read_csv(save_path, index_col=0)
+
+        # print(df_scores.sort_values(by="loss", ascending=True))
+        params_opt = dict(df_scores.sort_values(by="loss", ascending=True).iloc[0])
+        loss_opt = params_opt.pop("loss")
+        print(params_opt)
+
+        return params_opt
+
 
     def evaluate(self, evaluation_X, evaluation_y):
 
