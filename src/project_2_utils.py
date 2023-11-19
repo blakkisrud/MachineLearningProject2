@@ -276,7 +276,6 @@ def random_forest(X_train, y_train, X_eval, y_eval):
     return mse, accuracy
 
 def general_gradient_descent(X, y, beta, scheduler,
-                             cost_func,
                              gradient_cost_func,
                              epsilon = 1.0e-4,
                              max_iterations = 1000000,
@@ -960,8 +959,6 @@ def optimal_hyper_params(grid_table, min_col = "MSE_test"):
 
     """
 
-    print(grid_table)
-
     cols_in_frame = list(grid_table.columns)
     # Remove string from list
 
@@ -973,7 +970,6 @@ def optimal_hyper_params(grid_table, min_col = "MSE_test"):
     average_mse_table = grid_table.groupby(hp_params).mean()
 
     average_mse_table.drop(columns = ["Fold"], inplace=True)
-    print(average_mse_table)
 
     min_mse_index = average_mse_table[min_col].idxmin()
     index_names = average_mse_table.index.names
@@ -992,7 +988,33 @@ def optimal_hyper_params(grid_table, min_col = "MSE_test"):
 
     return optimal_hp, min_mse_value
 
-def ffn_tuning(X, y, fixed_params):
+def ffn_tuning(X, y, net, folds, hp_dict):
+
+    """
+
+    """
+
+    hp_names = list(hp_dict.keys())
+
+    for hp in hp_names:
+
+        for hp_val in hp_dict[hp]:
+
+            kfold = KFold(n_splits=folds, shuffle=True, random_state=42)
+
+            for train_index, test_index in kfold.split(X):
+
+                X_train = X[train_index]
+                X_test = X[test_index]
+
+                y_train = y[train_index]
+                y_test = y[test_index]
+
+
+
+
+
+
 
     return None
 
