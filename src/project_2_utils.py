@@ -18,6 +18,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
 """
 LOSS FUNCTIONS'
 - MSE 
@@ -50,7 +53,7 @@ def cross_entropy_loss_deriv(yhat, y):
 
 """
 
-Use the classe-implementations of the schedulers
+Use the class-implementations of the schedulers
 from the lecture notes
 
 """
@@ -158,8 +161,8 @@ class AdamScheduler(Scheduler):
 
     def reset(self):
         self.n_epochs += 1
-        self.moment = 0
-        self.second = 0
+        #self.moment = 0
+        #self.second = 0
 
 # End of the scheduler class definitions
 #==================================================================
@@ -276,7 +279,7 @@ def general_gradient_descent(X, y, beta, scheduler,
                              cost_func,
                              gradient_cost_func,
                              epsilon = 1.0e-4,
-                             max_iterations = 100000,
+                             max_iterations = 1000000,
                              return_diagnostics = False):
 
     """
@@ -306,8 +309,6 @@ def general_gradient_descent(X, y, beta, scheduler,
             mse_vector.append(mse)
             beta_vector.append(beta)
             iteration_vec.append(iter)
-
-    print("Number of iterations: ", iter)
 
     if return_diagnostics:
 
@@ -345,8 +346,6 @@ def general_stochastic_gradient_descent(X, y, beta,
     mse_by_epoch = []
     beta_by_epoch = []
 
-    best_mse = 1e9
-
     for epoch in range(epochs):
 
         beta_vector = []
@@ -374,6 +373,9 @@ def general_stochastic_gradient_descent(X, y, beta,
             mse_in_batch[i] = mse
             beta_vector.append(beta)
 
+        scheduler.reset()
+
+        print("Now doing epoch: ", epoch, end="\r")
 
         # Find the optimal beta
 
@@ -387,108 +389,6 @@ def general_stochastic_gradient_descent(X, y, beta,
     smallest_mse_over_epochs = np.min(mse_by_epoch)
 
     return optimal_beta_over_epochs, smallest_mse_over_epochs
-
-    
-
-
-
-
-
-
-
-
-        # For the epoch, find the 
-
-
-            #if (np.linalg.norm(gradient) < epsilon):
-            #    print("Gradient descent converged")
-            #    break
-
-        #if return_diagnostics:
-        #    y_predict = X.dot(beta)
-        #    mse = np.mean((y-y_predict)**2.0)
-
-        #    mse_vector.append(mse)
-        #    beta_vector.append(beta)
-        #    iteration_vec.append(iter)
-
-    print("Number of iterations: ", iter)
-
-        
-
-    if return_diagnostics:
-
-        diagnostic_output = {"mse": mse_vector,
-                             "beta_vector": beta_vector,
-                             "iteration": iteration_vec,
-                             "beta": beta}
-
-        return diagnostic_output
-
-    else:
-
-        return beta
-
-def general_minibatch_gradient_descent(X, y, beta, scheduler,
-                                        cost_func,
-                                        mini_batch_size,
-                                        gradient_cost_func,
-                                        epsilon = 1.0e-4,
-                                        max_iterations = 100000,
-                                        return_diagnostics = False):
-    """
-    This is the general stochastic gradient descent, can be performed with
-    all cost functions and gradients (that need to be analytically defined)
-    """
-
-    if return_diagnostics:
-        mse_vector = []
-        beta_vector = []
-        iteration_vec = []
-
-    n = int((X.shape[0]))
-
-    for iter in range(max_iterations):
-
-        shuffled_indices = np.random.permutation(n)
-        X_shuffled = X[shuffled_indices]
-        y_shuffled = y[shuffled_indices]
-
-        for i in range(0, n, mini_batch_size):
-
-            X_mini = X_shuffled[i:i+mini_batch_size]
-            y_mini = y_shuffled[i:i+mini_batch_size]
-
-            gradient = gradient_cost_func(X_mini, y_mini, beta)
-            change = scheduler.update_change(gradient)
-            beta -= change
-            if (np.linalg.norm(gradient) < epsilon):
-                print("Gradient descent converged")
-                break
-
-        if return_diagnostics:
-            y_predict = X.dot(beta)
-            mse = np.mean((y-y_predict)**2.0)
-
-            mse_vector.append(mse)
-            beta_vector.append(beta)
-            iteration_vec.append(iter)
-
-    print("Number of iterations: ", iter)
-
-    if return_diagnostics:
-            
-            diagnostic_output = {"mse": mse_vector,
-                                "beta_vector": beta_vector,
-                                "iteration": iteration_vec,
-                                "beta": beta}
-    
-            return diagnostic_output
-    
-    else:
-
-        return beta
-
 
 def time_step_length(t, t0, t1):
     """
@@ -532,7 +432,59 @@ def simple_func(x, a0, a1, a2, noise_sigma = 0.0):
     Stupid-simple function to test the code
     """
 
+    np.random.seed(42) # TODO: Set global seed
+
     return (a0 + a1*x + a2*x*x) + np.random.randn(len(x))*noise_sigma
+
+def standard_simple_function_dataset(x = np.arange(0, 10, 0.01), a0=1, a1=5, a2=3, noise_sigma = 0.2, random_state = 42,
+                             test_size = 0.2, scale = True, dims_in_design_matrix = 1):
+    """
+    Return the simple function with the design matrix, training and evaluation data 
+    set to perform deterministic tests
+
+    """
+
+    y = simple_func(x, a0, a1, a2, noise_sigma = noise_sigma)
+
+    X = one_d_design_matrix(x, dims_in_design_matrix)
+
+    if scale:
+
+        X = X[:,1]
+        X = X.reshape(-1, 1)
+
+        X_scaler = StandardScaler()
+        y_scaler = MinMaxScaler(feature_range=(0, 1))
+
+        X = X_scaler.fit_transform(X)
+        y = y_scaler.fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
+
+        y = y.reshape(-1, 1)
+
+    else:
+
+        X = X
+        y = y.reshape(-1, 1)
+        
+    idx = np.arange(len(y))
+
+    idx_train, idx_test = train_test_split(idx, test_size=test_size, 
+                                           random_state=random_state)
+    
+    X_train = X[idx_train]
+    X_eval = X[idx_test]
+
+    y_train = y[idx_train]
+    y_eval = y[idx_test]
+
+    return X_train, X_eval, y_train, y_eval, X, y, x, idx_train, idx_test
+
+
+
+    
+    x = np.arange(0, 10, 0.01)
+    y = utils.simple_func(x, 1, 5, 3, noise_sigma=0.2)
+
 
 def simple_cost_func(X, y, beta):
     """
@@ -819,14 +771,15 @@ def k_fold_hyper_parameter_tuning(X, y, function, hp_dict, k = 5):
 
     return optimal_lambda
 
-def sgd_tuning(X, y, list_of_etas, list_of_batch_sizes, k_folds, fixed_params):
+def sgd_tuning(X, y, fixed_params, list_of_etas, 
+               list_of_batch_sizes, k_folds):
 
     """
     Function to perform k-fold cross validation
     hp-tuning of the sgd-function
     """
 
-    grid_table = pd.DataFrame(columns=["eta", "batch_size", "mse"])
+    grid_table = pd.DataFrame(columns=["eta", "batch_size", "Fold", "MSE_test"])
 
     for eta in list_of_etas:
 
@@ -840,15 +793,186 @@ def sgd_tuning(X, y, list_of_etas, list_of_batch_sizes, k_folds, fixed_params):
 
                 try:
 
-                    print("Doing SGD")
+                    scheduler = fixed_params["scheduler"]
+                    scheduler.eta = eta # TODO: Do checks for the different schedulers
 
-                except:
+                    run = general_stochastic_gradient_descent(X[train_index], y[train_index],
+                                                                np.random.randn(3, 1), 
+                                                                mini_batch_size=batch_size,
+                                                                scheduler=scheduler,
+                                                                epochs=fixed_params["epochs"],
+                                                                cost_func=fixed_params["cost_func"],
+                                                                gradient_cost_func=fixed_params["gradient_cost_func"],
+                                                                return_diagnostics=True)
+                    
+                    optimal_beta = run[0] # TODO: Use dict
+                    mse_training = run[1]
 
-                    print("Something went wrong")
-                    continue
+                    y_pred = X[test_index] @ optimal_beta
 
+                    mse = mean_squared_error(y[test_index], y_pred)
 
-    return None
+                    run_table = pd.DataFrame({"eta": eta,
+                                                "batch_size": batch_size,
+                                                "Fold": current_fold,
+                                                "MSE_test": mse}, index=[0])
+                    
+                    grid_table = grid_table._append(run_table, ignore_index=True)
+
+                    current_fold += 1
+
+                except Exception as e:
+
+                    run_table = pd.DataFrame({"eta": eta,
+                                                "batch_size": batch_size,
+                                                "Fold": current_fold,
+                                                "MSE_test": np.nan}, index=[0])
+                    
+                    grid_table = grid_table._append(run_table, ignore_index=True)
+
+    return grid_table
+
+def gd_tuning(X, y, fixed_params, list_of_etas, k_folds):
+
+    """
+    Function to perform k-fold cross validation
+    hp-tuning of the gd-function
+    """
+
+    grid_table = pd.DataFrame(columns=["eta", "Fold", "MSE_test"])
+
+    for eta in list_of_etas:
+
+        kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+        
+        current_fold = 1 # Hacky
+
+        for train_index, test_index in kfold.split(X):
+
+            try:
+
+                scheduler = fixed_params["scheduler"]
+                scheduler.eta = eta # TODO: Do checks for the different schedulers
+
+                run = general_gradient_descent(X[train_index], y[train_index],
+                                                np.random.randn(3, 1), 
+                                                scheduler=scheduler,
+                                                cost_func=fixed_params["cost_func"],
+                                                gradient_cost_func=fixed_params["gradient_cost_func"],
+                                                return_diagnostics=True)
+                
+                optimal_beta = run[0] # TODO: Use dict
+                mse_training = run[1]
+
+                y_pred = X[test_index] @ optimal_beta
+
+                mse = mean_squared_error(y[test_index], y_pred)
+
+                run_table = pd.DataFrame({"eta": eta,
+                                            "Fold": current_fold,
+                                            "MSE_test": mse}, index=[0])
+                
+                grid_table = grid_table._append(run_table, ignore_index=True)
+
+                current_fold += 1
+
+            except Exception as e:
+
+                run_table = pd.DataFrame({"eta": eta,
+                                            "Fold": current_fold,
+                                            "MSE_test": np.nan}, index=[0])
+                
+                grid_table = grid_table._append(run_table, ignore_index=True)
+
+    return grid_table
+
+def ridge_tuning(X_train, y,  lmbd_list, k_folds):
+
+    """
+    Function to perform k-fold cross validation
+    hp-tuning of the ridge-function
+    """
+
+    grid_table = pd.DataFrame(columns=["lambda", "Fold", "MSE_test"])
+
+    for lmbd in lmbd_list:
+
+        kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+        
+        current_fold = 1 # Hacky
+
+        for train_index, test_index in kfold.split(X_train):
+
+            try:
+
+                beta_ridge = Ridge(X_train[train_index], y[train_index], lmbd)
+
+                y_pred = X_train[test_index] @ beta_ridge
+
+                mse = mean_squared_error(y[test_index], y_pred)
+
+                run_table = pd.DataFrame({"lambda": lmbd,
+                                            "Fold": current_fold,
+                                            "MSE_test": mse}, index=[0])
+                
+                grid_table = grid_table._append(run_table, ignore_index=True)
+
+                current_fold += 1
+
+            except Exception as e:
+
+                run_table = pd.DataFrame({"lambda": lmbd,
+                                            "Fold": current_fold,
+                                            "MSE_test": np.nan}, index=[0])
+                
+                grid_table = grid_table._append(run_table, ignore_index=True)
+
+    return grid_table
+
+def optimal_hyper_params(grid_table, min_col = "MSE_test"):
+    """
+    Function to find the optimal hyper parameters
+
+    Input is a table of ND grid searches and the column
+    to minimize on
+
+    Assumes that the grid_table has been made with 
+    a k-fold cross validation, and that the dataframe
+    only contains the hyper parameters and the MSE
+    in addition to the folds
+
+    TODO: Ensure that this is the case, as this is a bit 
+    hacky right now
+
+    Return values are the optimal hyper parameters
+    in a name-value dictionary
+
+    """
+
+    print(grid_table)
+
+    cols_in_frame = list(grid_table.columns)
+    # Remove string from list
+
+    cols_in_frame.remove(min_col)
+    cols_in_frame.remove("Fold")
+
+    hp_params = cols_in_frame
+
+    average_mse_table = grid_table.groupby(hp_params).mean()
+
+    average_mse_table.drop(columns = ["Fold"], inplace=True)
+    print(average_mse_table)
+
+    min_mse_index = average_mse_table[min_col].idxmin()
+    index_names = average_mse_table.index.names
+
+    min_index_values = list(min_mse_index)
+    min_mse_value = average_mse_table.loc[min_mse_index, min_col]
+
+    optimal_hp = dict(zip(index_names, min_index_values))
+
+    return optimal_hp, min_mse_value
 
 
 class exploratory_data_analysis():
