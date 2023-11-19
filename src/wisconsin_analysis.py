@@ -30,7 +30,7 @@ avaliable_data_factors = [1.0, 0.8, 0.6, 0.4, 0.2]   # to evaluate robustness to
 print(avaliable_data_factors)
 
 LOSS_FUNC_NAME = "cross-entropy"
-SCALE_INPUT = True
+SCALE_INPUT = False
 OUTCOME_ACTIVATION = utils.sigmoid
 OUTCOME_ACTIVATION_DERIV = utils.derivate(OUTCOME_ACTIVATION)
 
@@ -47,19 +47,19 @@ LMBD = 0.1
 # LMBD = 1.0
 LR = 0.01
 
-# SCHEDULER = utils.ConstantScheduler(LR)
+SCHEDULER = utils.ConstantScheduler(LR)
 # SCHEDULER = utils.MomentumScheduler(LR, 0.9)
-SCHEDULER = utils.AdamScheduler(LR, 0.9, 0.99)
+# SCHEDULER = utils.AdamScheduler(LR, 0.9, 0.99)
 
 df_scores = pd.DataFrame()
 
-LOAD_HP_TUNING = True # loads from saved file if true, computes grid-search if false
+LOAD_HP_TUNING = False # loads from saved file if true, computes grid-search if false
 
-EPOCHS_MAX = 500   # maximum number of epochs to evaluate in HP-grid search by 3-fold cross-validation
+EPOCHS_MAX = 1000   # maximum number of epochs to evaluate in HP-grid search by 3-fold cross-validation
 BATCHES_MAX = 3
 hp_tune_param_dict = {
-    "scheduler.eta":np.logspace(-4, 0, 5),
-    "lmbd":[0, 0.1, 0.15], "l1_ratio":[0.0, 0.5, 1.0]
+    "scheduler.eta":[0.001, 0.005, 0.01, 0.05, 0.1],
+    "lmbd":[0, 0.1, 0.2], "l1_ratio":[0.0]
 }   # + dropout_proba?
 
 # LOAD DATA

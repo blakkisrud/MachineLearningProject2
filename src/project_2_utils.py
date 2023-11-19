@@ -118,12 +118,12 @@ class AdagradScheduler(Scheduler):
         if self.G_t is None:
             self.G_t = np.zeros((gradient.shape[0], gradient.shape[0]))
 
-        self.G_t += gradient @ gradient.T
+        self.G_t +=gradient @ gradient.T
 
         G_t_inverse = 1 / (
             delta + np.sqrt(np.reshape(np.diagonal(self.G_t), (self.G_t.shape[0], 1)))
         )
-
+        self.eta = np.array([self.eta])
         return self.eta * gradient * G_t_inverse
 
     def reset(self):
@@ -349,6 +349,7 @@ def general_stochastic_gradient_descent(X, y, beta,
 
     mse_by_epoch = []
     beta_by_epoch = []
+    change_vector = []
 
     for epoch in range(epochs):
 
@@ -367,6 +368,8 @@ def general_stochastic_gradient_descent(X, y, beta,
 
             gradient = gradient_cost_func(xi, yi, beta)
             change = scheduler.update_change(gradient)
+
+            change_vector.append(change)
 
             beta -= change
 
@@ -392,7 +395,7 @@ def general_stochastic_gradient_descent(X, y, beta,
     optimal_beta_over_epochs = beta_by_epoch[np.argmin(mse_by_epoch)]
     smallest_mse_over_epochs = np.min(mse_by_epoch)
 
-    return optimal_beta_over_epochs, smallest_mse_over_epochs
+    return optimal_beta_over_epochs, smallest_mse_over_epochs, mse_by_epoch, change_vector
 
 def time_step_length(t, t0, t1):
     """
@@ -774,6 +777,31 @@ def k_fold_hyper_parameter_tuning(X, y, function, hp_dict, k = 5):
     optimal_lambda = hp_dict["lmbd"][np.argmin(mse_by_lambda)]
 
     return optimal_lambda
+
+# ================================================
+
+# Metric
+
+def calculate_metrics(y, yhat):
+    """
+    # Function to calculate the TP, TN, FP, FN values
+    # y:    original values
+    # yhat: prediction
+    """
+    tp, fp, tn, fn = 0, 0, 0, 0
+    
+    for pred, true in zip(y, yhat):
+        if pred == 1 and true == 1:
+            tp += 1
+        elif pred == 1 and true == 0:
+            fp += 1
+        elif pred == 0 and true == 0:
+            tn += 1
+        elif pred == 0 and true == 1:
+            fn += 1
+
+    return tp, fp, tn, fn
+
 
 def sgd_tuning(X, y, fixed_params, list_of_etas, 
                list_of_batch_sizes, k_folds):

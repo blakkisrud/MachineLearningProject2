@@ -21,6 +21,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
 
 import pandas as pd
 
@@ -32,7 +33,7 @@ from project_2_utils import AdagradScheduler
 from project_2_utils import RMS_propScheduler
 
 from neural_net import fnn
-
+from neural_net import grid_search
 # MAIN HYPERVARIABLES
 # FOR VARIABLES RELATED TO EACH DATA SET, E.G. NUMBER OF SAMPLES, SEE THE LOADING IF-TESTS FURTHER BELOW
 
@@ -41,23 +42,22 @@ data_mode = 2
 data_mode_names = {1: "simple_1d_function",
                    2: "wisconsin_classif"}  # add MNIST, Franke, terrain ?
 
-# NETWORK PARAMETERS
 
-# dims_hidden = [4, 8, 3]
-# dims_hidden = [1]
-dims_hidden = [4]
-lr = 0.1
+# NETWORK PARAMETERS
+dims_hidden = [8]
+lr = 0.01       # Learning rate
+lmbd = 0.01    # L2-regularization parameter
 epochs_max = 1000   # maximum number of epochs to consider before tuning it as a HP
 # num_batches = 32
 num_batches = 4
 dropout_retain_proba = 1.0
 
-loss_func_name = "MSE"
-# loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
+#loss_func_name = "MSE"
+loss_func_name = "cross-entropy"      # only use when final layer outcome are in range (0, 1] ! E.g. with sigmoid, softmax activations
 
-FIND_OPTIMAL_EPOCHS = True
+FIND_OPTIMAL_EPOCHS = False
 
-random_state = 42   # does nothing, yet
+random_state = 42   
 
 
 plot_dir = "figs/"      # Where to plot
@@ -129,10 +129,10 @@ elif data_mode == 2:
     input_dim = X.shape[1]
 
     # outcome func softmax ? outputs probability distributed values, which sigmoid does not, according to http://neuralnetworksanddeeplearning.com/chap3.html
-    outcome_func = utils.softmax
-    outcome_func_deriv = utils.derivate(utils.softmax)
-    # outcome_func = utils.sigmoid
-    # outcome_func_deriv = utils.derivate(utils.sigmoid)
+    #outcome_func = utils.identity
+    #outcome_func_deriv = utils.derivate(utils.identity)
+    outcome_func = utils.sigmoid
+    outcome_func_deriv = utils.derivate(utils.sigmoid)
 
 
 idx = np.arange(len(y))
@@ -147,9 +147,8 @@ X_evaluation = X[idx_evaluation, :]
 
 y_train = y[idx_train]
 y_evaluation = y[idx_evaluation]
-
 # Set up parameters for the FFN
-
+print(f'y-train shape: {np.shape(y_train)}')
 activation_func_list = [
     utils.sigmoid,
     utils.RELU,
@@ -158,12 +157,11 @@ activation_func_list = [
 ]
 
 schedule_list = [
-    # ConstantScheduler(lr)
-    ConstantScheduler(0.1),
-    MomentumScheduler(0.1, 0.9),
-    AdagradScheduler(0.1),
-    RMS_propScheduler(0.1, 0.9),
-    AdamScheduler(0.1, 0.9, 0.999),
+    ConstantScheduler(lr),
+    MomentumScheduler(lr, 0.5),
+    #AdagradScheduler(lr),
+    RMS_propScheduler(lr, 0.9),
+    AdamScheduler(lr, 0.9, 0.999)
 ]
 
 print("\nTESTING ALL COMBINATIONS OF HIDDEN LAYER ACTIVATION FUNCTIONS", end="\t")
@@ -179,7 +177,10 @@ result_frame = pd.DataFrame(columns=["ActivationFunc",
                                      "Design",
                                      "Scheduler",
                                      "MSE",
-                                     "Accuracy"],
+                                     "Accuracy",
+                                     "F1",
+                                     "Accuracy train",
+                                     "F1 train"],
                             index=np.arange(0))
 
 max_loss = 0
@@ -198,7 +199,10 @@ for activation_func in activation_func_list:
                                               "Design",
                                               "Scheduler",
                                               "MSE",
-                                              "Accuracy"],
+                                              "Accuracy",
+                                              "F1",
+                                              "Accuracy train",
+                                              "F1 train"],
                                      index=np.arange(1))
 
             activation_func = activation_func
@@ -206,13 +210,12 @@ for activation_func in activation_func_list:
 
             run_frame["ActivationFunc"] = activation_func.__name__
             run_frame["Scheduler"] = scheduler.__class__.__name__
-            run_frame["Design"] = dims_hidden
-
+            run_frame["Design"] = str(dims_hidden)
             net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr, loss_func_name=loss_func_name,
                       activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
                       outcome_func_deriv=outcome_func_deriv,
                       batches=num_batches,
-                      lmbd=0,
+                      lmbd=lmbd,
                       scheduler=scheduler, random_state=random_state)
 
             nrand = 1
@@ -232,7 +235,7 @@ for activation_func in activation_func_list:
             net.init_random_weights_biases(verbose=True)
 
             loss_epochs = net.train(X_train, y_train, epochs=epochs_opt,
-                                    scheduler=scheduler, dropout_retain_proba=0.75,
+                                    scheduler=scheduler, dropout_retain_proba=dropout_retain_proba,
                                     verbose=False)
             print("WEIGHTS post-training:",
                   [np.round(w.reshape(-1), 1) for w in net.weights])
@@ -243,10 +246,13 @@ for activation_func in activation_func_list:
             print(
                 i, f"final loss ({loss_func_name}) = {loss_final:.2e}", end="\t")
             max_loss = loss_final if loss_final > max_loss else max_loss
+            
+            yhat = net.predict_feed_forward(X_evaluation)
+            yhat = yhat.reshape(-1, 1)
+            yhat_train = net.predict_feed_forward(X_train)
+            yhat_train = yhat_train.reshape(-1, 1)
 
-            yhat = net.predict_feed_forward(X)
-            mse = mean_squared_error(y, yhat)
-
+            mse = mean_squared_error(y_evaluation, yhat)
             run_frame["MSE"] = mse
 
             title = f"hidden dims = {net.dims_hiddens}, eta={net.learning_rate:.3e}, N_obs={num_obs}" + " act=" + \
@@ -258,17 +264,31 @@ for activation_func in activation_func_list:
                 plot_folder, f"{name_of_act_func}_{name_of_scheduler}_{name_of_out_func}_{loss_func_name}_hptune.png")
 
             # PLOTTING LOSS OVER EPOCHS WITH FINAL PREDICTIONS
-            # TODO: ADD TEST SET PREDICTIONS / LOSS
             fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
             ax, ax1 = ax
             # ax1.set_ylim(0, 1)
 
             if data_mode == 2:
-                # acc = accuracy_score(y, yhat)
-                auc = roc_auc_score(y, yhat)
+                # Test evaluation
+                auc = roc_auc_score(y_evaluation, yhat)
                 y_hat_binary = np.zeros((yhat.shape[0], 1))
                 y_hat_binary[yhat > 0.5] = 1
-                acc = accuracy_score(y, y_hat_binary)
+                acc = accuracy_score(y_evaluation, y_hat_binary)
+                tp, fp, tn, fn = utils.calculate_metrics(y_evaluation, y_hat_binary)
+                f1 = f1_score(y_evaluation, y_hat_binary)
+                run_frame["F1"] = f1
+                run_frame["Accuracy"] = acc
+
+                # Train evaluation 
+                y_hat_binary_train = np.zeros((yhat_train.shape[0], 1))
+                y_hat_binary_train[yhat_train > 0.5] = 1
+                acc_train = accuracy_score(y_train, y_hat_binary_train)
+                f1_train = f1_score(y_train, y_hat_binary_train)
+                run_frame["F1 train"] = f1_train
+                run_frame["Accuracy train"] = acc_train
+                
+                print(f"The F1 score is: {f1}")
+                print(f"TP: {tp}, FP: {fp}, TN: {tn}, FN: {fn}")
                 print(f"mse={mse:.2e}, auc={auc:.3f}, acc={acc:.3f}")
                 title += f"\nmse={mse:.2e}, auc={auc:.2f}, acc={acc:.2f}"
             else:
@@ -292,11 +312,11 @@ for activation_func in activation_func_list:
 
             elif data_mode == 2:
                 # yhat_thresh = [1 if p > 0.5 else 0 for p in yhat]
-                yhat_0 = yhat[y == 0]
-                yhat_1 = yhat[y == 1]
+                yhat_0 = yhat[y_evaluation == 0]
+                yhat_1 = yhat[y_evaluation == 1]
                 print(len(yhat_0), len(yhat_1))
-                ax1.plot(y[y == 0], yhat_0, "o", c=f"C{i}")
-                ax1.plot(y[y == 1], yhat_1, "o", c=f"C{i}")
+                ax1.plot(y_evaluation[y_evaluation == 0], yhat_0, "o", c=f"C{i}")
+                ax1.plot(y_evaluation[y_evaluation == 1], yhat_1, "o", c=f"C{i}")
 
             ax1.set_title(f"predictions post-training")
             ax1.legend()
@@ -349,121 +369,9 @@ for activation_func in activation_func_list:
 
 print(result_frame)
 
+# Perform Grid-Search beforehand to find L2-regularization parameter as well as learning rate
+grid_search(X_train, y_train, 2, input_dim, output_dim, dims_hidden, loss_func_name, num_batches, epochs_max)
+
+
+
 sys.exit()
-
-
-def grid_search():
-    # TODO: Change to test set, or include both, test & training accuracy
-    n = 10       # Tests for learning rate and hyperparameter
-    start = -8  # In log_10 scale for learning rate & lmbd
-    end = 1
-    eta_vals = np.logspace(start, end, n)
-    lmbd_vals = np.logspace(start, end, n)
-    iterations = len(eta_vals) * len(lmbd_vals)
-    iter = 0
-    accuracy_matrix = np.zeros((len(eta_vals), len(lmbd_vals)))
-
-    # Functions and scheduler aren't significant for finding optimal eta & lmbd values, they are investigated in a later stage
-    outcome_func = utils.sigmoid
-    outcome_func_deriv = utils.derivate(utils.sigmoid)
-    activation_func = utils.RELU
-    activation_func_deriv = utils.derivate(utils.RELU)
-
-    for i, eta in enumerate(eta_vals):
-
-        scheduler = AdamScheduler(eta, 0.9, 0.999)
-
-        for j, lmbd in enumerate(lmbd_vals):
-            iter += 1
-            print(f'Breaking News: Now on iteration {iter}/{iterations}!')
-
-            net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=eta, loss_func_name=loss_func_name,
-                      activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv,
-                      outcome_func_deriv=outcome_func_deriv,
-                      batches=num_batches,
-                      lmbd=lmbd,
-                      scheduler=scheduler, random_state=random_state)
-
-            # Change to test set
-            loss_epochs = net.train(X_train, y_train, epochs=epochs_max,
-                                    scheduler=scheduler, dropout_retain_proba=1,
-                                    verbose=False)
-
-            # Also change to test set
-            yhat = net.predict_feed_forward(X_evaluation)
-            if data_mode == 2:
-                y_hat_binary = np.zeros((yhat.shape[0], 1))
-                y_hat_binary[yhat > 0.5] = 1
-                acc = accuracy_score(y_evaluation, y_hat_binary)
-                accuracy_matrix[i][j] = acc
-            else:
-                # Change to testing set
-                MSE = np.sum(utils.mse_loss(yhat, y))
-                accuracy_matrix[i][j] = MSE
-
-    fig, ax = plt.subplots(figsize=(10, 10))
-    sns.heatmap(accuracy_matrix, annot=True, ax=ax, cmap="viridis", fmt=".3f")
-    ax.set_title("Test Accuracy")
-    ax.set_ylabel("$log_{10}(\eta)$")
-    ax.set_xticks(np.linspace(1, n, n)-0.5, np.linspace(start, end, n))
-    ax.set_yticks(np.linspace(1, n, n)-0.5, np.linspace(start, end, n))
-    ax.set_xlabel("$log_{10}(\lambda)$")
-    plt.show()
-
-
-grid_search()
-
-if error_log != "":
-    print(error_log)
-else:
-    print("No errors found")
-
-print("Have a nice day!")
-sys.exit()
-
-# Set up design matrix
-
-X = np.c_[np.ones((num_obs, 1)), x]
-
-# Hessian matrix
-
-H = (2.0 / num_obs) * X.T.dot(X)
-
-# Get the eigenvalues of the hessian
-
-EigValues, EigVectors = np.linalg.eig(H)
-
-print("Eigenvalues of Hessian matrix: ", EigValues)
-
-# Having a OLS-solution for comparison
-
-beta_linreg = np.linalg.inv(X.T.dot(X)).dot(X.T).dot(y)
-
-# Set the learning rate, eta, and the number of iterations
-
-eta = 0.001
-MaxIterations = 100000
-beta = np.random.randn(2, 1)
-epsilon = 1.0e-8
-
-for iter in range(MaxIterations):
-    gradient = (2.0 / num_obs) * X.T.dot(X.dot(beta) - y)
-    beta -= eta*gradient
-    if (np.linalg.norm(gradient) < epsilon):
-        break
-
-print("Number of iterations: ", iter)
-
-print("Final beta values: ", beta)
-print("Final gradient norm: ", np.linalg.norm(gradient))
-print("Linear regression values: ", beta_linreg)
-
-# Plot the results
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.plot(x, y, 'o', label='Data points')
-ax.plot(x, X.dot(beta), label='Gradient descent')
-ax.plot(x, X.dot(beta_linreg), label='Linear regression')
-plt.legend()
-plt.savefig(plot_dir + "gradient_descent.png")

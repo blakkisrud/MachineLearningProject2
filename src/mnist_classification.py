@@ -18,7 +18,8 @@ X, y_orig = fetch_openml(
 print(X.shape, y_orig.shape)
 
 
-N_max = X.shape[0]
+# N_max = X.shape[0]
+N_max = 50
 
 X = X[:N_max]
 y_orig = y_orig[:N_max]
@@ -126,12 +127,12 @@ for lmbd in np.logspace(-1, 0, 3):
                   activation_func=activation, activation_func_deriv=activation_deriv)
 
         net.init_random_weights_biases(verbose=True)
-        loss_per_epoch, loss_per_epoch_test = net.train(X_train, y_train, X_test, y_test, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
+        # loss_per_epoch, loss_per_epoch_test = net.train(X_train, y_train, X_test, y_test, dropout_retain_proba=dropout_proba, epochs=epochs, verbose=True)
+        # net.save_state(savename, folder=folder_save_results, overwrite=True)
 
-
-        net.save_state(savename, folder=folder_save_results, overwrite=True)
         net.load_state(savename, folder=folder_save_results)
-
+        loss_per_epoch = net.loss_for_epochs_train
+        loss_per_epoch_test = net.loss_for_epochs_test
 
         fig, ax = plt.subplots(figsize=(12, 8))
         ax.plot(list(range(1, epochs+1)), loss_per_epoch, label="Train")

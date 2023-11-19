@@ -152,7 +152,6 @@ class fnn():
         self.A = Al
         return Al
 
-
     def backpropagate(self, y, **kwargs):
 
         """
@@ -511,7 +510,6 @@ class fnn():
 
         pass
 
-
     def dropout_reset(self):
         '''
         Sets the weights tuned after dropping out some neurons,
@@ -544,7 +542,6 @@ class fnn():
 
         self.dropout_state = False
         pass
-
 
     def save_state(self, name, folder="results", overwrite=False):
         # SAVES: dictionary of metadata, loss for epochs during training, current weights & biases
@@ -628,7 +625,6 @@ class fnn():
             print("\tQUITTING SAVE STATE")
         pass
 
-
     def load_state(self, name, folder="results"):
         path_meta = os.path.join(folder, name + "_meta.npy")
         path_wb = os.path.join(folder, name + "_wb.npy")
@@ -678,7 +674,6 @@ class fnn():
             print("\tLOADED NN-STATE with no errors :)")
         pass
 
-
     def update_parameters(self, params_new):
         for key, val in params_new.items():
             if key.split(".")[0].lower() == "scheduler":
@@ -690,7 +685,6 @@ class fnn():
                 self.__setattr__(key, val)
         pass
 
-
 def grid_search(X, y, data_mode, input_dim, output_dim, dims_hidden, loss_func_name, num_batches, epochs_max):
     """
     Search for optimal learning rate and regularization parameters
@@ -700,10 +694,10 @@ def grid_search(X, y, data_mode, input_dim, output_dim, dims_hidden, loss_func_n
     Rest:       Parameters of NN
     """
 
-    n = 10       # Tests for learning rate and hyperparameter
-    start = -8   # In log_10 scale for learning rate & lmbd
+    n = 6       # Tests for learning rate and hyperparameter
+    start = -4   # In log_10 scale for learning rate & lmbd
     end = 1
-    n_splits= 5
+    n_splits= 3
     learning_vals = np.logspace(start, end, n)
     lmbd_vals = np.logspace(start, end, n)
     iterations = len(learning_vals) * len(lmbd_vals)
@@ -766,214 +760,3 @@ def grid_search(X, y, data_mode, input_dim, output_dim, dims_hidden, loss_func_n
     ax.set_yticks(np.linspace(1, n, n)-0.5, np.linspace(start, end, n))
     ax.set_xlabel("$log_{10}(\lambda)$")
     plt.show()
-
-
-if __name__ == "__main__":
-
-    input_mode = 1
-
-    valid_inputs = [1, 2]
-
-    while input_mode not in valid_inputs:
-        input_mode = input("SELECT INPUT: 1 = simple one-dimensional function, 2 = single MNIST digits image, 3 = franke function (not implemented), 4 = terrain image (not implemented)\n")
-        try:
-            input_mode = int(input_mode)
-        except Exception as e:
-            print(*e.args)
-
-        if not input_mode in valid_inputs:
-            print("Invalid input, please try again...")
-
-    # LOAD ONE-DIM FUNCTION R1 -> R1
-    if input_mode == 1:
-        print("LOADING SIMPLE ONE-DIMENSIONAL FUNCTION")
-        x = np.arange(0, 10, 0.01)
-        X = utils.one_d_design_matrix(x, n=1)
-        X = X[:, 1]     # remove bias from design matrix
-        X = X.reshape(-1, 1)
-
-        y = utils.simple_func(x, 1, 5, 3, noise_sigma=2.0)
-        # y = y.reshape(1, -1)
-        output_dim = 1   # each observation have only one dimension
-        input_dim = 1
-        # plt.plot(x, y)
-        # plt.show()
-
-    # LOAD SINGLE MNIST-IMAGE R2 -> R2
-    if input_mode == 2:
-        print("LOADING SINGLE MNIST IMAGE")
-        dataset_digits = load_digits()
-        print(dataset_digits.images.shape)
-        img = dataset_digits.images[0]
-        del dataset_digits
-        print("IMAGE SHAPE:", img.shape)
-        y = img.ravel()
-        X = np.arange(0, len(y)).reshape(1, -1)
-
-        # use all pixels for both training and testing
-        # TODO: implement 2-dimensional design matrix
-        input_dim = np.prod(img.shape)
-        output_dim = np.prod(img.shape)
-
-
-    y = MinMaxScaler(feature_range=(0, 1)).fit_transform(y.reshape(-1, 1)).reshape(-1, 1)
-    num_obs = len(y)
-    print("SHAPE x / y:", X.shape, y.shape)
-
-    # activation_func = np.vectorize(lambda z: 1 / (1 + np.exp(-z)))  # sigmoidal activation
-    # outcome_func = np.vectorize(lambda z: z)    # identity function
-
-    activation_func = utils.sigmoid
-    activation_func_deriv = utils.sigmoid_derivated
-
-    outcome_func = utils.identity
-    outcome_func_deriv = utils.identity_derived
-
-    #dims_hidden = [8, 8, 8]
-    #dims_hidden = [4]
-    dims_hidden = []
-
-    lr = 0.1
-    epochs = 100
-    search_values = False
-
-    if search_values == True:
-        eta_vals = np.logspace(-5, 1, 7)
-        lmbd_vals = np.logspace(-5, 1, 7)
-        # store the models for later use
-        DNN_numpy = np.zeros((len(eta_vals), len(lmbd_vals)), dtype=object)
-        mse_list = np.zeros((len(eta_vals), len(lmbd_vals)))
-        fig, ax = plt.subplots(figsize = (10, 10))    
-
-        # grid search
-        for i, eta in enumerate(eta_vals):
-            for j, lmbd in enumerate(lmbd_vals):
-                dnn = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=eta,
-                activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
-                outcome_func_deriv=outcome_func_deriv,
-                lmbd = lmbd,
-                batches=32,
-                scheduler=AdamScheduler(eta, 0.9, 0.999))
-                dnn.train(X, y, epochs=epochs, 
-                                        scheduler=AdamScheduler(eta, 0.9, 0.999),
-                                        plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {dnn.learning_rate}", verbose=False)
-        
-                DNN_numpy[i][j] = dnn
-                yhat = dnn.predict_feed_forward(X)
-                mse = mean_squared_error(y, yhat)
-                mse_list[i][j] = mse
-        sns.heatmap(mse_list, annot=True, ax=ax, cmap="viridis")
-        ax.set_title("Training Accuracy")
-        ax.set_ylabel("$\eta$")
-        ax.set_xlabel("$\lambda$")
-        plt.savefig('Accuracy board.png')
-        plt.show()
-
-
-
-    net = fnn(dim_input=input_dim, dim_output=output_dim, dims_hiddens=dims_hidden, learning_rate=lr,
-              activation_func=activation_func, outcome_func=outcome_func, activation_func_deriv=activation_func_deriv, 
-              outcome_func_deriv=outcome_func_deriv,
-              batches=32,
-              lmbd = 0.001, 
-              scheduler=AdamScheduler(lr, 0.9, 0.999))
-
-    #net.find_optimal_epochs_kfold(X, y)
-
-    # Plot MSE for epochs for repeated random initialization
-
-    nrand = 1
-    plot = True
-
-    fig_folder = r"figs\neural_test"
-    if not os.path.exists(fig_folder):
-        os.mkdir(fig_folder)
-
-    title = f"hidden dims = {net.dims_hiddens}, repeated with random initiation {nrand} times, eta={net.learning_rate:.3e}, N_obs={num_obs}"
-    savename = f"nn={net.layer_sizes}_lr={net.learning_rate}.png"
-    fig_path = os.path.join(fig_folder, savename)
-
-    if plot:
-        fig, ax = plt.subplots(ncols=2, figsize=(12, 8))
-        ax, ax1 = ax
-        ax1.set_ylim(0, 1)
-        # fig1, ax1 = plt.subplots()
-
-        net.learning_rate = lr
-        linewidth = 4.0
-        max_loss = 0
-
-        for i in range(nrand):
-            net.init_random_weights_biases()
-
-            loss_epochs = net.train(X, y, epochs=epochs, 
-                                    scheduler=AdamScheduler(lr, 0.9, 0.999),
-                                    plot=False, figax=(fig, ax), showplot=False, plot_title=f"MSE lr = {net.learning_rate}", verbose=False)
-            # print(net.weights, net.biases)
-
-            loss_final = loss_epochs[-1]
-            max_loss = loss_final if loss_final > max_loss else max_loss
-
-            yhat = net.predict_feed_forward(X)
-            mse = mean_squared_error(y, yhat)
-            mse2 = mean_squared_error(y, net.activations[-1])
-            print(i, f"mse={mse:.2e}, {mse2:.2e}")
-            print(f"weights", net.weights, "biases", net.biases)
-
-
-            ax.plot(list(range(len(loss_epochs))), loss_epochs, c=f"C{i}", label=i)
-        ax1.plot(x, yhat, c=f"C{i}", label=i)
-
-        # Compare to Ridge regression    
-        clf = Ridge(alpha=0.1)
-        x1 = x.reshape(-1,1)
-        y1 = y.reshape(-1,1)
-        clf.fit(x1, y1)
-        y_pred = clf.predict(x1)
-        mse = mean_squared_error(y_pred, y)
-        print(f'MSE Ridge regression: {mse:.2}')
-        ax1.plot(x, y_pred, linewidth=linewidth, c="orange", zorder=1, label='Ridge regression')
-
-        ax1.plot(x, y, linewidth=linewidth, c="black", zorder=0)
-        # ax.plot([0, epochs], [0, 0], linewidth=linewidth, c="black", zorder=0)
-        ax.set_title(f"MSE during training")
-        ax.set_xlabel("Epochs")
-
-        ax1.set_title(f"predictions post-training")
-        ax1.set_xlabel("x")
-        ax.set_ylim(0, max_loss*1.1)
-
-        ax.legend()
-        ax1.legend()
-
-        fig.suptitle(title)
-        fig.savefig(fig_path)
-        plt.show()
-
-
-    for wi, bi in zip(net.weights, net.biases):
-        print(wi.shape, bi.shape)
-
-    yhat = net.predict_feed_forward(X)
-    print(yhat.shape)
-
-    if input_mode == 1:
-        fig, ax = plt.subplots()
-        ax.plot(x, y, label="y")
-        ax.plot(x, yhat, label="yhat")
-
-        #for j in range(5):
-        #    net.init_random_weights_biases()
-        #    yhat = net.predict_feed_forward(X)
-        #    ax.plot(x, yhat, color="C1")
-
-    if input_mode == 2:
-        img_pred = yhat.reshape(img.shape)
-        fig, ax = plt.subplots(ncols=2)
-        ax[0].imshow(img, cmap="gray");
-        ax[0].set_title("Ground truth")
-        ax[1].imshow(img_pred, cmap="gray");
-        ax[1].set_title("Prediction")
-
-    # plt.show()
-    plt.close()
