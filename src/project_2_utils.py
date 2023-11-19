@@ -347,6 +347,7 @@ def general_stochastic_gradient_descent(X, y, beta,
 
     mse_by_epoch = []
     beta_by_epoch = []
+    change_vector = []
 
     for epoch in range(epochs):
 
@@ -365,6 +366,8 @@ def general_stochastic_gradient_descent(X, y, beta,
 
             gradient = gradient_cost_func(xi, yi, beta)
             change = scheduler.update_change(gradient)
+
+            change_vector.append(change)
 
             beta -= change
 
@@ -390,7 +393,7 @@ def general_stochastic_gradient_descent(X, y, beta,
     optimal_beta_over_epochs = beta_by_epoch[np.argmin(mse_by_epoch)]
     smallest_mse_over_epochs = np.min(mse_by_epoch)
 
-    return optimal_beta_over_epochs, smallest_mse_over_epochs
+    return optimal_beta_over_epochs, smallest_mse_over_epochs, mse_by_epoch, change_vector
 
 def time_step_length(t, t0, t1):
     """
