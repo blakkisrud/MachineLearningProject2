@@ -17,6 +17,9 @@ from sklearn.metrics import mean_squared_error, accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import mean_squared_error
+
 import pandas as pd
 
 import project_2_utils as utils
@@ -51,9 +54,10 @@ result_table = pd.DataFrame(columns=["Method", "MSE", "Optimal hyper-parameter"]
 # SGD with momentum plus other schedulers
 
 DO_OLS = True
-DO_SGD = False
+DO_SGD = True
 DO_GD = True
 DO_FFN = False
+DO_SKLEARN = False
 
 if DO_OLS:
 
@@ -219,8 +223,8 @@ if DO_GD:
 
     list_of_schedulers = [ConstantScheduler(0.01),
                             MomentumScheduler(0.01, 0.9),
-                            #AdamScheduler(0.01, 0.9, 0.999),
-                            #RMS_propScheduler(0.01, 0.9)
+                            AdamScheduler(0.01, 0.9, 0.999),
+                            RMS_propScheduler(0.01, 0.9)
                              ]
 
     for scheduler in list_of_schedulers:
@@ -267,86 +271,6 @@ if DO_GD:
                                   "Optimal hyper-parameter": [optimal_hp_params]})
 
         result_table = result_table._append(run_table, ignore_index=True)
-
-        #grid_table = pd.DataFrame(columns=["eta", "MSE", "Fold"])
-
-        #for eta, i in zip(list_of_etas, range(len(list_of_etas))):
-
-        #    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
-
-        #    current_fold = 1
-
-        #    scheduler.eta = eta
-
-        #    for train_index, test_index in kfold.split(X_train):
-
-        #        beta = utils.general_gradient_descent(X_train[train_index], y_train[train_index],
-        #                                        np.random.randn(3, 1),
-        #                                        scheduler=scheduler,
-        #                                        max_iterations=1000,
-        #                                        cost_func=utils.simple_cost_func,
-        #                                        gradient_cost_func=utils.gradient_simple_function,
-        #                                        return_diagnostics=False)
-
-        #        y_pred = X_train[test_index] @ beta
-
-        #        try:
-
-        #            mse = mean_squared_error(y_train[test_index], y_pred)
-
-        #        except:
-
-        #            mse = np.nan
-
-        #        run_table = pd.DataFrame({"eta": eta,
-        #                                    "MSE": mse,
-        #                                    "Fold": current_fold}, index=[0])
-
-        #        grid_table = grid_table._append(run_table, ignore_index=True)
-
-        #        current_fold += 1
-
-        #        scheduler.reset()
-
-
-        #average_mse_table = grid_table.groupby(["eta"]).mean()
-        #average_mse_table.drop(columns=["Fold"], inplace=True)
-
-        ## Find the minimum MSE
-
-        #min_mse_index = np.argmin(average_mse_table["MSE"])
-        #min_mse = np.min(average_mse_table["MSE"])
-
-        #optimal_eta = average_mse_table.index[min_mse_index]
-
-        #optimal_hp_params = {"eta": optimal_eta}
-
-        #print("Optimal eta:", optimal_eta)
-
-        #scheduler_optimal = scheduler
-        #scheduler_optimal.eta = optimal_eta
-
-        #beta_optimal = utils.general_gradient_descent(X_train, y_train,
-        #                                    np.random.randn(3, 1),
-        #                                    scheduler=scheduler_optimal,
-        #                                    max_iterations=10000,
-        #                                    cost_func=utils.simple_cost_func,
-        #                                    gradient_cost_func=utils.gradient_simple_function,
-        #                                    return_diagnostics=False)
-
-        #y_pred = X_test @ beta_optimal
-
-        #try:
-        #    mse_eval = mean_squared_error(y_test, y_pred)
-        #except:
-        #    mse_eval = np.nan
-
-        #method_string = "GD" + "-", str(scheduler.__class__.__name__)
-
-        #run_table = pd.DataFrame({"Method": [method_string], "MSE": [mse_eval], 
-        #                          "Optimal hyper-parameter": [optimal_hp_params]})
-
-        #result_table = result_table._append(run_table, ignore_index=True)
 
 # Now for the FFN
 
@@ -510,6 +434,52 @@ if DO_FFN:
                                             "Optimal hyper-parameter": [optimal_hp_params]})
 
                 result_table = result_table._append(run_table, ignore_index=True)
+
+if DO_SKLEARN:
+
+    # Generate synthetic data
+    np.random.seed(42)
+    X = np.linspace(0, 10, 1000)
+
+    print(X)
+    y = utils.simple_func(X, 1, 5, 3, noise_sigma=0.0)
+
+    # Polynomial features
+    poly = PolynomialFeatures(degree=3)
+    X_poly = poly.fit_transform(X.reshape(-1, 1))
+
+    # Implement gradient descent with momentum
+    learning_rate = 0.001
+    beta = np.zeros(X_poly.shape[1])  # Initialize coefficients
+    gamma = 0.9  # Momentum parameter
+    epochs = 1000
+    prev_grad = np.zeros(X_poly.shape[1])  # Initialize momentum
+
+    for epoch in range(epochs):
+        # Calculate predictions and error
+        y_pred = np.dot(X_poly, beta)
+        error = y - y_pred
+
+        # Calculate gradients
+        gradient = -2 * np.dot(X_poly.T, error) / len(y)
+
+        # Update momentum
+        grad_with_momentum = gamma * prev_grad + learning_rate * gradient
+
+        # Update parameters
+        beta -= grad_with_momentum
+        prev_grad = grad_with_momentum
+
+        # Calculate and print MSE
+        mse = mean_squared_error(y, y_pred)
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch}: MSE = {mse}")
+
+    print(f"Final Coefficients: {beta}")
+
+
+
+
 
 print(result_table)
 
