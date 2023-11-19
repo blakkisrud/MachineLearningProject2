@@ -237,7 +237,7 @@ class fnn():
         epochs = kwargs.get("epochs", None)
         if not epochs:
             try:
-                epochs = self.__getattribute__("epochs")
+                epochs = int(self.__getattribute__("epochs"))
             except Exception as e:
                 print(*e.args)
                 sys.exit()
@@ -436,7 +436,7 @@ class fnn():
 
                 t1 = time.time()
                 dt = t1 - t0
-                print(f"dt = {dt:.3g} s (loss_min={loss_min:.2e})")
+                print(f"dt = {dt:.3g} s (loss_min={loss_min:.2e}), epoch_opt={epochs_opt}")
 
             if save_path:
                 df_scores.to_csv(save_path)

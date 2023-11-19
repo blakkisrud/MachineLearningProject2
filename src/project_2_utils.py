@@ -27,12 +27,14 @@ LOSS FUNCTIONS'
 - CROSS-ENTROPY
 """
 
-def mse_loss(yhat, y, lmbd=0.0, w=0):
+def mse_loss(yhat, y, lmbd=0.0, w=0, l1_ratio=0.0):
     if lmbd == 0.0:
         return np.square(yhat - y)
     else:
-        l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
-        return np.square(yhat - y) + l2_regularization
+        # l2_regularization = 0.5 * lmbd * sum(np.sum(weight**2) for weight in w)
+        regularization = lmbd * np.sum([(1 - l1_ratio) * np.sum(weights**2) + l1_ratio * np.sum(np.abs(weights)) for weights in w])
+
+        return np.square(yhat - y) + regularization
     
 def mse_loss_deriv(yhat, y):
     return 2 * (yhat - y)

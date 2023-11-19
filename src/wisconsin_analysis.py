@@ -1,4 +1,7 @@
 import pandas as pd
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 1000)
 
 import project_2_utils as utils
 from neural_net import fnn
@@ -21,9 +24,9 @@ from sklearn.utils import resample
 RANDOM_STATE = 42
 
 NETWORK_ARCHITECTURES = ([16], [8], [4], [2], [])
-# avaliable_data_factors = [1.0, 0.5, 0.1]
-# avaliable_data_factors = [1.0, 0.8, 0.5, 0.3]   # to evaluate robustness to smaller train sets, after hyperparameter tuning
-avaliable_data_factors = []   # to evaluate robustness to smaller train sets, after hyperparameter tuning
+# avaliable_data_factors = [1.0, 0.9, 0.8]
+avaliable_data_factors = [1.0, 0.8, 0.6, 0.4, 0.2]   # to evaluate robustness to smaller train sets, after hyperparameter tuning
+# avaliable_data_factors = [1.0]   # to evaluate robustness to smaller train sets, after hyperparameter tuning
 print(avaliable_data_factors)
 
 LOSS_FUNC_NAME = "cross-entropy"
@@ -50,13 +53,13 @@ SCHEDULER = utils.AdamScheduler(LR, 0.9, 0.99)
 
 df_scores = pd.DataFrame()
 
-LOAD_HP_TUNING = False # loads from saved file if true, computes grid-search if false
+LOAD_HP_TUNING = True # loads from saved file if true, computes grid-search if false
 
-EPOCHS_MAX = 1000   # maximum number of epochs to evaluate in HP-grid search by 3-fold cross-validation
+EPOCHS_MAX = 500   # maximum number of epochs to evaluate in HP-grid search by 3-fold cross-validation
 BATCHES_MAX = 3
 hp_tune_param_dict = {
     "scheduler.eta":np.logspace(-4, 0, 5),
-    "lmbd":[0, 0.1, 0.15, 0.2], "l1_ratio":[0.0, 0.5, 1.0]
+    "lmbd":[0, 0.1, 0.15], "l1_ratio":[0.0, 0.5, 1.0]
 }   # + dropout_proba?
 
 # LOAD DATA
@@ -182,7 +185,7 @@ for dims_hiddens in NETWORK_ARCHITECTURES:
 
             # TRAINING using optimal HPs
             loss_train, loss_test = net.train(X_train_red, y_train_red, X_test, y_test,
-                                              verbose=True)
+                                              verbose=False)
 
             num_nonzero_weights = [np.count_nonzero(w) for w in net.weights]
             num_nonzero_biases = [np.count_nonzero(b) for b in net.biases]
@@ -215,8 +218,8 @@ for dims_hiddens in NETWORK_ARCHITECTURES:
             df_scores.loc[i, "Num neurons"] = num_neurons
             df_scores.loc[i, "%N_train"] = n_max_pc
 
-            df_scores.loc[i, ["Acc", "Rec", "Prec", "F1"]] = [acc, rec, prec, f1]
-            df_scores.loc[i, ["loss train", "loss test"]] = loss_train[-1], loss_test[-1]
+            df_scores.loc[i, ["Accuracy", "Recall", "Precision", "F1-score"]] = [acc, rec, prec, f1]
+            df_scores.loc[i, ["cross-entropy loss train", "cross-entropy loss test"]] = loss_train[-1], loss_test[-1]
 
 
 print(df_scores.shape)
@@ -225,9 +228,13 @@ df_scores_avg = df_scores.groupby(["Hidden dims", "%N_train"]).mean().reset_inde
 
 print(df_scores_avg.sort_values(by=["Num neurons", "%N_train"]).round(3))
 
+plt.close()
+
 # PLOT MODEL PERFORMANCES WITH DECREASING AVALIABLE TRAINING DATA
-fig, ax = plt.subplots()
-# sns.lineplot(df_scores_avg, x="%N_train", y="loss test", hue="Hidden dims", ax=ax)
-sns.lineplot(df_scores_avg, x="%N_train", y="loss test", hue="Hidden dims", ax=ax)
+for c in ["cross-entropy loss test", "F1-score", "Accuracy", "Recall", "Precision", "F1-score"]:
+    fig, ax = plt.subplots()
+    # sns.lineplot(df_scores_avg, x="%N_train", y="loss test", hue="Hidden dims", ax=ax)
+    sns.lineplot(df_scores_avg, x="%N_train", y=c, hue="Hidden dims", ax=ax)
+    ax.set_xlabel("Fraction used of available training data")
 
 plt.show()
