@@ -841,32 +841,38 @@ def gd_tuning(X, y, fixed_params, list_of_etas, k_folds):
 
     grid_table = pd.DataFrame(columns=["eta", "Fold", "MSE_test"])
 
+    scheduler = fixed_params["scheduler"]
+
     for eta in list_of_etas:
 
         kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
         
         current_fold = 1 # Hacky
+        scheduler.eta = eta # TODO: Do checks for the different schedulers
 
         for train_index, test_index in kfold.split(X):
 
             try:
 
-                scheduler = fixed_params["scheduler"]
-                scheduler.eta = eta # TODO: Do checks for the different schedulers
-
                 run = general_gradient_descent(X[train_index], y[train_index],
                                                 np.random.randn(3, 1), 
                                                 scheduler=scheduler,
+                                                max_iterations=fixed_params["max_iterations"],
                                                 cost_func=fixed_params["cost_func"],
                                                 gradient_cost_func=fixed_params["gradient_cost_func"],
-                                                return_diagnostics=True)
+                                                return_diagnostics=False)
                 
-                optimal_beta = run[0] # TODO: Use dict
-                mse_training = run[1]
+                optimal_beta = run
 
                 y_pred = X[test_index] @ optimal_beta
 
-                mse = mean_squared_error(y[test_index], y_pred)
+                try:
+
+                    mse = mean_squared_error(y[test_index], y_pred)
+
+                except Exception as e:
+
+                    mse = np.nan
 
                 run_table = pd.DataFrame({"eta": eta,
                                             "Fold": current_fold,
@@ -876,7 +882,12 @@ def gd_tuning(X, y, fixed_params, list_of_etas, k_folds):
 
                 current_fold += 1
 
+                scheduler.reset()
+
+
             except Exception as e:
+
+                print(e)
 
                 run_table = pd.DataFrame({"eta": eta,
                                             "Fold": current_fold,
@@ -967,12 +978,23 @@ def optimal_hyper_params(grid_table, min_col = "MSE_test"):
     min_mse_index = average_mse_table[min_col].idxmin()
     index_names = average_mse_table.index.names
 
-    min_index_values = list(min_mse_index)
+    if len(index_names) == 1:
+
+        min_index_values = [min_mse_index]
+
+    else:
+
+        min_index_values = list(min_mse_index)
+
     min_mse_value = average_mse_table.loc[min_mse_index, min_col]
 
     optimal_hp = dict(zip(index_names, min_index_values))
 
     return optimal_hp, min_mse_value
+
+def ffn_tuning(X, y, fixed_params):
+
+    return None
 
 
 class exploratory_data_analysis():
