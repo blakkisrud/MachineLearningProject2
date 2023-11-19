@@ -1,5 +1,12 @@
 """
-Script to do the 1D analysis for all of the different ways of finding
+Script to test the implementation of the learning methods.
+
+When run as a script, this script will generate a simple data set and
+test the implementation of the learning methods on said set.
+
+The end result is a table with the MSE for each method that is saved
+to a file.
+
 """
 
 import autograd.numpy as np
@@ -31,11 +38,15 @@ from project_2_utils import RMS_propScheduler
 
 from neural_net import fnn
 
-path_to_output = "plots_1d"
+path_to_output = "one_d_output"
+
+if not os.path.exists(path_to_output):
+    os.makedirs(path_to_output)
 
 random_state = 42
 
 # Make the data set and split into training and test
+# The test-set is held off until the end of each learning method
 
 X_train, X_test, y_train, y_test, X, y, x, idx_train, idx_test = utils.standard_simple_function_dataset(dims_in_design_matrix=2, 
                                                                                             scale=False)
@@ -53,10 +64,12 @@ result_table = pd.DataFrame(columns=["Method", "MSE", "Optimal hyper-parameter"]
 # SGD
 # SGD with momentum plus other schedulers
 
+# Decide which methods to run
+
 DO_OLS = True
 DO_SGD = True
 DO_GD = True
-DO_FFN = False
+DO_FFN = True
 DO_SKLEARN = False
 
 if DO_OLS:
@@ -84,43 +97,15 @@ if DO_OLS:
     
     lambdas = np.logspace(-5, 5, 11)
 
-    foo = utils.ridge_tuning(X_train, y_train, lambdas, k_folds=3)
+    tuning_table = utils.ridge_tuning(X_train, y_train, lambdas, k_folds=3)
 
-    utils.optimal_hyper_params(foo)
+    print(tuning_table)
+
+    optimal_hp_params, min_mse_value = utils.optimal_hyper_params(tuning_table)
+
+    optimal_lambda = optimal_hp_params["lambda"]
 
     mse_by_lambda = np.zeros(len(lambdas))
-
-    # Do it with k-fold validation
-    # NB! This should be made into a subroutine/method/function
-
-    n_folds = 3
-
-    for l, i in zip(lambdas, range(len(lambdas))):
-
-        kfold = KFold(n_splits=n_folds, shuffle=True, random_state=42)
-
-        current_fold = 1 # Hacky
-
-        mse_by_fold = np.zeros(n_folds)
-
-        for train_index, test_index in kfold.split(X_train):
-
-            beta_ridge = utils.Ridge(X_train[train_index], y_train[train_index], l)
-
-            y_pred = X_train[test_index] @ beta_ridge
-
-            mse = mean_squared_error(y_train[test_index], y_pred)
-
-            mse_by_fold[current_fold-1] = mse
-
-            current_fold += 1
-
-        mse_by_lambda[i] = np.mean(mse_by_fold)
-        print("MSE by lambda:", mse_by_lambda[i], "Lambda:", l)
-
-    optimal_lambda = lambdas[np.argmin(mse_by_lambda)]
-
-    optimal_hp_params = {"lambda": optimal_lambda}
 
     beta_ridge = utils.Ridge(X_train, y_train, optimal_lambda)
 
@@ -183,7 +168,7 @@ if DO_SGD:
         scheduler_optimal = scheduler
         scheduler.eta = optimal_hp_params["eta"]
 
-        optimal_beta, mse_training = utils.general_stochastic_gradient_descent(
+        optimal_beta, mse_training, mse_training_epoch, change_vector = utils.general_stochastic_gradient_descent(
             X_train, y_train, np.random.randn(3, 1), 
             mini_batch_size=optimal_hp_params["batch_size"],
             epochs=10,
@@ -231,7 +216,7 @@ if DO_GD:
         
         fixed_params = {"cost_func": utils.simple_cost_func,
                         "gradient_cost_func": utils.gradient_simple_function,
-                        "max_iterations": 1000,  # TODO: Remove
+                        "max_iterations": 1000,  # TODO: Adjust
                         "scheduler": scheduler}
 
         list_of_etas = [0.00001, 0.0001, 0.001, 0.01, 0.1]
@@ -256,7 +241,10 @@ if DO_GD:
                                             max_iterations=100000,
                                             cost_func=utils.simple_cost_func,
                                             gradient_cost_func=utils.gradient_simple_function,
-                                            return_diagnostics=False)
+                                            return_diagnostics=True)
+        
+        if type(beta_optimal) == dict:
+            beta_optimal = beta_optimal["beta"]
 
         y_pred = X_test @ beta_optimal
 
@@ -280,7 +268,6 @@ if DO_FFN:
     X_train, X_test, y_train, y_test, X, y, x, idx_train, idx_test = utils.standard_simple_function_dataset(dims_in_design_matrix=1, 
                                                                                             scale=True)
 
-
     num_obs = len(x)
     n = len(x)
 
@@ -288,16 +275,16 @@ if DO_FFN:
 
     activation_func_list = [
         utils.sigmoid,
-        #utils.RELU,
-        #utils.LRELU,
+        utils.RELU,
+        utils.LRELU,
         #utils.softmax
     ]
 
     schedule_list = [
-        #ConstantScheduler(0.1),
-        #MomentumScheduler(0.1, 0.9),
+        ConstantScheduler(0.1),
+        MomentumScheduler(0.1, 0.9),
         #AdagradScheduler(0.1),
-        #RMS_propScheduler(0.1, 0.9),
+        RMS_propScheduler(0.1, 0.9),
         AdamScheduler(0.1, 0.9, 0.999),
     ]
 
@@ -328,19 +315,6 @@ if DO_FFN:
                 grid_table = pd.DataFrame(columns=["eta", 
                                                    "MSE_test", 
                                                    "Fold"])
-                
-                fixed_params = {"dim_input": input_dim,
-                                "dim_output": output_dim,
-                                "dims_hiddens": dims_hidden,
-                                "loss_func_name": loss_func_name,
-                                "activation_func": activation_func,
-                                "outcome_func": outcome_func,
-                                "activation_func_deriv": activation_func_deriv,
-                                "outcome_func_deriv": outcome_func_deriv,
-                                "batches": num_batches,
-                                "lmbd": 0,
-                                "scheduler": scheduler,
-                                "random_state": random_state}
 
                 for eta in eta_list:
 
@@ -437,6 +411,8 @@ if DO_FFN:
 
 if DO_SKLEARN:
 
+    print("Running sanity check with sklearn for the GD and momentum")
+
     # Generate synthetic data
     np.random.seed(42)
     X = np.linspace(0, 10, 1000)
@@ -477,10 +453,11 @@ if DO_SKLEARN:
 
     print(f"Final Coefficients: {beta}")
 
-
-
-
-
+print("----------------------------------------")
+print("Final result table")
 print(result_table)
 
-sys.exit()
+result_table.to_excel(path_to_output + "/result_table.xlsx")
+
+print("End of run")
+
